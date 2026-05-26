@@ -17,6 +17,13 @@ jobs:
           node-version: 20
           cache: pnpm
       - run: pnpm install --frozen-lockfile=false
+      - name: Generate Prisma client
+        run: pnpm db:generate
+        env:
+          DATABASE_URL: postgresql://placeholder@localhost:5432/placeholder
+      - name: Generate dev JWT keypair
+        run: ./scripts/generate-jwt-keys.sh
+        working-directory: services/auth-service
       - run: pnpm lint
       - run: pnpm typecheck
       - run: pnpm test
