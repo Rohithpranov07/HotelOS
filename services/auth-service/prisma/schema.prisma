@@ -126,6 +126,7 @@ model Guest {
   sentimentScore  Decimal     @default(0.50) @db.Decimal(3, 2)
   churnRisk       Decimal?    @db.Decimal(3, 2)
   dietaryFlags    String[]    @default([])
+  preferences     Json        @default("{}")
   waOptIn         Boolean     @default(false)
   appPushOptIn    Boolean     @default(false)
   profileMongoId  String?     @db.VarChar(24)

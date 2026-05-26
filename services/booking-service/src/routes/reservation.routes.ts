@@ -17,6 +17,20 @@ const errBody = (code: string, message: string, extra: Record<string, unknown> =
 
 const ACTIVE_STATUSES: ReservationStatus[] = ['confirmed', 'pre_checked_in', 'checked_in'];
 
+type MobileKeyStatus = 'not_applicable' | 'pending_activation' | 'active' | 'revoked';
+
+function deriveMobileKeyStatus(
+  status: ReservationStatus,
+  mobileKeyId: string | null | undefined,
+): MobileKeyStatus {
+  if (status === 'checked_out' || status === 'cancelled' || status === 'no_show') {
+    return 'revoked';
+  }
+  if (status === 'checked_in') return mobileKeyId ? 'active' : 'pending_activation';
+  if (status === 'pre_checked_in') return 'pending_activation';
+  return 'not_applicable';
+}
+
 function todayISODate(): string {
   return new Date().toISOString().slice(0, 10);
 }
@@ -49,11 +63,7 @@ function toReservationDto(r: Prisma.ReservationGetPayload<{ include: { room: tru
     totalAmount,
     paidAmount,
     balanceDue: Math.max(0, totalAmount - paidAmount),
-    mobileKeyStatus: (r.mobileKeyId ? 'active' : 'not_applicable') as
-      | 'not_applicable'
-      | 'pending_activation'
-      | 'active'
-      | 'revoked',
+    mobileKeyStatus: deriveMobileKeyStatus(r.status, r.mobileKeyId),
     isDnd: r.isDnd,
     specialRequests: r.specialRequests,
   };
@@ -152,6 +162,26 @@ export async function reservationRoutes(app: FastifyInstance): Promise<void> {
           },
           include: { room: true },
         });
+        // Merge new preferences into the guest record so they persist across stays.
+        const guest = await tx.guest.findUnique({
+          where: { id: reservation.guestId },
+          select: { preferences: true },
+        });
+        const existing =
+          guest && typeof guest.preferences === 'object' && guest.preferences !== null
+            ? (guest.preferences as Record<string, unknown>)
+            : {};
+        const merged: Record<string, unknown> = { ...existing };
+        const p = parsed.data.preferences;
+        if (p.room_temp_celsius !== undefined) merged.room_temp_celsius = p.room_temp_celsius;
+        if (p.pillow_type !== undefined) merged.pillow_type = p.pillow_type;
+        if (p.floor_preference !== undefined) merged.floor_preference = p.floor_preference;
+        if (p.special_notes !== undefined) merged.special_notes = p.special_notes;
+        merged.early_checkin_request = p.early_checkin_request;
+        await tx.guest.update({
+          where: { id: reservation.guestId },
+          data: { preferences: merged as Prisma.InputJsonValue },
+        });
         return r;
       });
 
@@ -240,8 +270,9 @@ export async function reservationRoutes(app: FastifyInstance): Promise<void> {
       const paidAmount = num(reservation.paidAmount);
       const balanceDue = Math.max(0, totalAmount - paidAmount);
 
-      // Payment verification placeholder. payments-service (T-09) will do the
-      // actual provider check; here we trust the provided id when method != folio.
+      // TODO(T-09 payments-service): verify the payment with the provider before
+      // marking paidAmount. Currently we only require the id to be present for
+      // razorpay and trust it settled.
       if (parsed.data.payment_method === 'razorpay' && balanceDue > 0 && !parsed.data.razorpay_payment_id) {
         return reply
           .status(400)
