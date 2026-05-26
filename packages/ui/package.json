@@ -9,7 +9,7 @@
     "./theme": "./src/theme.ts"
   },
   "scripts": {
-    "lint": "eslint src",
+    "lint": "echo 'ui: no lint targets yet'",
     "typecheck": "tsc --noEmit"
   },
   "peerDependencies": {

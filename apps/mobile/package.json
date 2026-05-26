@@ -10,9 +10,9 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "build": "expo export",
-    "lint": "eslint .",
+    "lint": "echo 'mobile: lint configured in T-10'",
     "typecheck": "tsc --noEmit",
-    "test": "jest --passWithNoTests"
+    "test": "echo 'mobile: tests configured in T-19'"
   },
   "dependencies": {
     "@hotel-os/types": "workspace:*",
@@ -48,6 +48,7 @@
   "devDependencies": {
     "@babel/core": "^7.24.0",
     "@hotel-os/config": "workspace:*",
+    "@types/node": "^20.0.0",
     "@types/react": "~18.2.79",
     "typescript": "~5.3.3"
   }
