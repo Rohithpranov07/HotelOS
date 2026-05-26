@@ -1,18 +1,23 @@
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import helmet from '@fastify/helmet';
+import { config } from './config.js';
+import { keyRoutes } from './routes/key.routes.js';
+import { startBookingEventsWorker } from './workers/booking-events.worker.js';
 
 const SERVICE_NAME = 'access-service';
-const PORT = Number(process.env.PORT ?? 3004);
 
-async function main() {
+export async function buildApp() {
   const app = Fastify({
     logger: {
       level: process.env.LOG_LEVEL ?? 'info',
       transport:
-        process.env.NODE_ENV === 'production'
+        config.nodeEnv === 'production'
           ? undefined
-          : { target: 'pino-pretty', options: { translateTime: 'HH:MM:ss', ignore: 'pid,hostname' } },
+          : {
+              target: 'pino-pretty',
+              options: { translateTime: 'HH:MM:ss', ignore: 'pid,hostname' },
+            },
     },
   });
 
@@ -25,15 +30,25 @@ async function main() {
     timestamp: new Date().toISOString(),
   }));
 
-  // TODO(T-XX): register route plugins here
+  await app.register(keyRoutes, { prefix: '/api/v1' });
 
+  return app;
+}
+
+async function main() {
+  const app = await buildApp();
   try {
-    await app.listen({ port: PORT, host: '0.0.0.0' });
-    app.log.info(`${SERVICE_NAME} listening on :${PORT}`);
+    await app.listen({ port: config.port, host: '0.0.0.0' });
+    if (config.workerEnabled) {
+      startBookingEventsWorker();
+      app.log.info('booking-events worker started');
+    }
   } catch (err) {
     app.log.error(err);
     process.exit(1);
   }
 }
 
-main();
+if (import.meta.url === `file://${process.argv[1]}`) {
+  main();
+}
