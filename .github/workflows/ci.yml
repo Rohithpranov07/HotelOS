@@ -39,3 +39,5 @@ jobs:
       - run: pip install -r apps/ai-service/requirements.txt
       - run: python -c "import main; print('ai-service imports ok')"
         working-directory: apps/ai-service
+      - run: pytest -q
+        working-directory: apps/ai-service
