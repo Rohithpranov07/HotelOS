@@ -1,0 +1,412 @@
+// Hotel OS — shared Prisma schema
+// Owned by auth-service. All other services connect to the same DB
+// via the generated client (re-export from @hotel-os/types in future task).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── ENUMS ────────────────────────────────────────────────
+
+enum LoyaltyTier {
+  bronze
+  silver
+  gold
+  platinum
+}
+
+enum ReservationStatus {
+  confirmed
+  pre_checked_in
+  checked_in
+  checked_out
+  cancelled
+  no_show
+}
+
+enum OrderType {
+  food
+  beverage
+  laundry
+  housekeeping
+  amenity
+  maintenance
+  spa
+}
+
+enum OrderStatus {
+  pending
+  accepted
+  in_progress
+  completed
+  cancelled
+}
+
+enum StaffRole {
+  front_desk
+  housekeeping
+  room_service
+  maintenance
+  manager
+  admin
+}
+
+enum RoomStatus {
+  clean
+  occupied
+  dirty
+  inspected
+  out_of_order
+}
+
+enum LoyaltyTransactionType {
+  earn
+  redeem
+  expire
+  adjust
+  bonus
+  referral
+}
+
+// ─── PROPERTY ─────────────────────────────────────────────
+
+model Property {
+  id               String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name             String   @db.VarChar(200)
+  slug             String   @unique @db.VarChar(100)
+  address          String
+  city             String   @db.VarChar(100)
+  country          String   @db.Char(2)
+  timezone         String   @default("Asia/Kolkata") @db.VarChar(50)
+  pmsType          String?  @db.VarChar(50)
+  pmsApiKeyEnc     String?
+  waPhoneNumberId  String?  @db.VarChar(50)
+  waAccessTokenEnc String?
+  loyaltyEarnRate  Decimal  @default(1.00) @db.Decimal(5, 2)
+  pointsExpiryDays Int      @default(365)
+  subscriptionTier String   @default("starter") @db.VarChar(20)
+  isActive         Boolean  @default(true)
+  createdAt        DateTime @default(now()) @db.Timestamptz
+  updatedAt        DateTime @updatedAt @db.Timestamptz
+
+  rooms        Room[]
+  staff        Staff[]
+  reservations Reservation[]
+  guests       Guest[]
+  menuItems    MenuItem[]
+  campaigns    CrmCampaign[]
+  loyaltyTxns  LoyaltyTransaction[]
+  waConvs      WaConversation[]
+  orders       Order[]
+
+  @@map("properties")
+}
+
+// ─── GUEST ────────────────────────────────────────────────
+
+model Guest {
+  id              String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  phone           String      @unique @db.VarChar(20)
+  email           String?     @unique @db.VarChar(255)
+  fullName        String      @db.VarChar(200)
+  nationality     String?     @db.Char(2)
+  languageCode    String      @default("en") @db.VarChar(10)
+  dateOfBirth     DateTime?   @db.Date
+  anniversaryDate DateTime?   @db.Date
+  loyaltyTier     LoyaltyTier @default(bronze)
+  loyaltyPoints   Int         @default(0)
+  lifetimePoints  Int         @default(0)
+  totalStays      Int         @default(0)
+  totalRevenue    Decimal     @default(0) @db.Decimal(12, 2)
+  sentimentScore  Decimal     @default(0.50) @db.Decimal(3, 2)
+  churnRisk       Decimal?    @db.Decimal(3, 2)
+  dietaryFlags    String[]    @default([])
+  waOptIn         Boolean     @default(false)
+  appPushOptIn    Boolean     @default(false)
+  profileMongoId  String?     @db.VarChar(24)
+  propertyId      String      @db.Uuid
+  createdAt       DateTime    @default(now()) @db.Timestamptz
+  updatedAt       DateTime    @updatedAt @db.Timestamptz
+
+  property            Property             @relation(fields: [propertyId], references: [id])
+  reservations        Reservation[]
+  loyaltyTransactions LoyaltyTransaction[]
+  feedback            GuestFeedback[]
+  waConversations     WaConversation[]
+
+  @@index([propertyId])
+  @@map("guests")
+}
+
+// ─── STAFF ────────────────────────────────────────────────
+
+model Staff {
+  id           String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  propertyId   String    @db.Uuid
+  email        String    @unique @db.VarChar(255)
+  fullName     String    @db.VarChar(200)
+  role         StaffRole
+  passwordHash String
+  totpSecret   String?
+  fcmToken     String?
+  isActive     Boolean   @default(true)
+  createdAt    DateTime  @default(now()) @db.Timestamptz
+  updatedAt    DateTime  @updatedAt @db.Timestamptz
+
+  property        Property         @relation(fields: [propertyId], references: [id])
+  assignedOrders  Order[]
+  waConversations WaConversation[]
+
+  @@index([propertyId, role])
+  @@map("staff")
+}
+
+// ─── ROOM ─────────────────────────────────────────────────
+
+model Room {
+  id                 String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  propertyId         String     @db.Uuid
+  roomNumber         String     @db.VarChar(10)
+  roomType           String     @db.VarChar(50)
+  floor              Int
+  maxOccupancy       Int        @default(2)
+  baseRate           Decimal    @db.Decimal(10, 2)
+  iotControllerId    String?    @db.VarChar(100)
+  lockDeviceId       String?    @db.VarChar(100)
+  amenities          String[]   @default([])
+  isAvailable        Boolean    @default(true)
+  housekeepingStatus RoomStatus @default(clean)
+  lastCleanedAt      DateTime?  @db.Timestamptz
+  createdAt          DateTime   @default(now()) @db.Timestamptz
+
+  property     Property      @relation(fields: [propertyId], references: [id])
+  reservations Reservation[]
+
+  @@unique([propertyId, roomNumber])
+  @@map("rooms")
+}
+
+// ─── RESERVATION ──────────────────────────────────────────
+
+model Reservation {
+  id               String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  guestId          String            @db.Uuid
+  propertyId       String            @db.Uuid
+  roomId           String?           @db.Uuid
+  pmsBookingRef    String?           @unique @db.VarChar(50)
+  status           ReservationStatus
+  checkInDate      DateTime          @db.Date
+  checkOutDate     DateTime          @db.Date
+  actualCheckIn    DateTime?         @db.Timestamptz
+  actualCheckOut   DateTime?         @db.Timestamptz
+  adults           Int
+  children         Int               @default(0)
+  ratePlan         String?           @db.VarChar(20)
+  roomRate         Decimal?          @db.Decimal(10, 2)
+  totalRoomAmount  Decimal           @default(0) @db.Decimal(12, 2)
+  totalFnbAmount   Decimal           @default(0) @db.Decimal(12, 2)
+  totalOtherAmount Decimal           @default(0) @db.Decimal(12, 2)
+  totalAmount      Decimal           @default(0) @db.Decimal(12, 2)
+  paidAmount       Decimal           @default(0) @db.Decimal(12, 2)
+  source           String?           @db.VarChar(50)
+  specialRequests  String?
+  aiPreBrief       String?
+  mobileKeyId      String?           @db.VarChar(100)
+  isDnd            Boolean           @default(false)
+  createdAt        DateTime          @default(now()) @db.Timestamptz
+  updatedAt        DateTime          @updatedAt @db.Timestamptz
+
+  guest               Guest                @relation(fields: [guestId], references: [id])
+  property            Property             @relation(fields: [propertyId], references: [id])
+  room                Room?                @relation(fields: [roomId], references: [id])
+  orders              Order[]
+  feedback            GuestFeedback[]
+  loyaltyTransactions LoyaltyTransaction[]
+
+  @@index([guestId])
+  @@index([propertyId, status])
+  @@index([checkInDate, checkOutDate])
+  @@map("reservations")
+}
+
+// ─── MENU ─────────────────────────────────────────────────
+
+model MenuItem {
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  propertyId      String   @db.Uuid
+  name            String   @db.VarChar(200)
+  description     String?
+  price           Decimal  @db.Decimal(10, 2)
+  category        String   @db.VarChar(50)
+  dietaryTags     String[] @default([])
+  allergens       String[] @default([])
+  imageUrl        String?
+  prepTimeMinutes Int      @default(15)
+  isAvailable     Boolean  @default(true)
+  availableFrom   String?  @db.VarChar(5)
+  availableTo     String?  @db.VarChar(5)
+  sortOrder       Int      @default(0)
+  createdAt       DateTime @default(now()) @db.Timestamptz
+
+  property Property @relation(fields: [propertyId], references: [id])
+
+  @@index([propertyId, category])
+  @@map("menu_items")
+}
+
+// ─── ORDER ────────────────────────────────────────────────
+
+model Order {
+  id              String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  reservationId   String      @db.Uuid
+  guestId         String      @db.Uuid
+  propertyId      String      @db.Uuid
+  assignedStaffId String?     @db.Uuid
+  type            OrderType
+  status          OrderStatus @default(pending)
+  items           Json        @default("[]")
+  totalAmount     Decimal     @default(0) @db.Decimal(10, 2)
+  scheduledFor    DateTime?   @db.Timestamptz
+  slaDeadline     DateTime?   @db.Timestamptz
+  acceptedAt      DateTime?   @db.Timestamptz
+  completedAt     DateTime?   @db.Timestamptz
+  guestRating     Int?
+  guestFeedback   String?
+  source          String      @default("app") @db.VarChar(20)
+  notes           String?
+  createdAt       DateTime    @default(now()) @db.Timestamptz
+  updatedAt       DateTime    @updatedAt @db.Timestamptz
+
+  reservation   Reservation @relation(fields: [reservationId], references: [id])
+  assignedStaff Staff?      @relation(fields: [assignedStaffId], references: [id])
+  property      Property    @relation(fields: [propertyId], references: [id])
+
+  @@index([propertyId, status])
+  @@index([reservationId])
+  @@index([assignedStaffId, status])
+  @@map("orders")
+}
+
+// ─── LOYALTY ──────────────────────────────────────────────
+
+model LoyaltyTransaction {
+  id            String                 @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  guestId       String                 @db.Uuid
+  propertyId    String                 @db.Uuid
+  reservationId String?                @db.Uuid
+  type          LoyaltyTransactionType
+  points        Int
+  balanceAfter  Int
+  reason        String?                @db.VarChar(200)
+  referenceId   String?                @db.Uuid
+  expiresAt     DateTime?              @db.Date
+  isExpired     Boolean                @default(false)
+  createdAt     DateTime               @default(now()) @db.Timestamptz
+
+  guest       Guest        @relation(fields: [guestId], references: [id])
+  property    Property     @relation(fields: [propertyId], references: [id])
+  reservation Reservation? @relation(fields: [reservationId], references: [id])
+
+  @@index([guestId])
+  @@index([propertyId, type])
+  @@index([expiresAt, isExpired])
+  @@map("loyalty_transactions")
+}
+
+// ─── FEEDBACK ─────────────────────────────────────────────
+
+model GuestFeedback {
+  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  reservationId String   @db.Uuid
+  guestId       String   @db.Uuid
+  orderId       String?  @db.Uuid
+  rating        Int
+  mood          String   @db.VarChar(20)
+  categories    Json     @default("{}")
+  textNote      String?
+  voiceNoteUrl  String?
+  isAnonymous   Boolean  @default(false)
+  createdAt     DateTime @default(now()) @db.Timestamptz
+
+  reservation Reservation @relation(fields: [reservationId], references: [id])
+  guest       Guest       @relation(fields: [guestId], references: [id])
+
+  @@index([reservationId])
+  @@index([guestId])
+  @@map("guest_feedback")
+}
+
+// ─── WA CONVERSATIONS (CRM scaffold, Phase 3) ─────────────
+
+model WaConversation {
+  id               String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  guestId          String    @db.Uuid
+  propertyId       String    @db.Uuid
+  waContactId      String    @db.VarChar(20)
+  status           String    @default("active") @db.VarChar(20)
+  journeyStage     String?   @db.VarChar(30)
+  botEnabled       Boolean   @default(true)
+  lastMessageAt    DateTime? @db.Timestamptz
+  sessionSentiment Decimal   @default(0.50) @db.Decimal(3, 2)
+  complaintFlag    Boolean   @default(false)
+  unreadCount      Int       @default(0)
+  contextSnapshot  Json      @default("[]")
+  assignedAgentId  String?   @db.Uuid
+  reservationId    String?   @db.Uuid
+  createdAt        DateTime  @default(now()) @db.Timestamptz
+  updatedAt        DateTime  @updatedAt @db.Timestamptz
+
+  guest         Guest    @relation(fields: [guestId], references: [id])
+  property      Property @relation(fields: [propertyId], references: [id])
+  assignedAgent Staff?   @relation(fields: [assignedAgentId], references: [id])
+
+  @@index([propertyId, status])
+  @@index([guestId])
+  @@map("wa_conversations")
+}
+
+// ─── CRM CAMPAIGNS (Phase 3 scaffold) ─────────────────────
+
+model CrmCampaign {
+  id                String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  propertyId        String   @db.Uuid
+  name              String   @db.VarChar(200)
+  triggerType       String   @db.VarChar(50)
+  triggerDelayHours Int      @default(0)
+  targetSegment     Json     @default("{}")
+  messageTemplate   String
+  waTemplateName    String?  @db.VarChar(100)
+  abVariant         String   @default("A") @db.Char(1)
+  abSplitPct        Int      @default(50)
+  sentCount         Int      @default(0)
+  readCount         Int      @default(0)
+  repliedCount      Int      @default(0)
+  convertedCount    Int      @default(0)
+  revenueAttributed Decimal  @default(0) @db.Decimal(12, 2)
+  isActive          Boolean  @default(true)
+  createdAt         DateTime @default(now()) @db.Timestamptz
+
+  property Property @relation(fields: [propertyId], references: [id])
+
+  @@map("crm_campaigns")
+}
+
+// ─── NOTIFICATION LOG ─────────────────────────────────────
+
+model NotificationLog {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  recipientId String   @db.Uuid
+  type        String   @db.VarChar(30)
+  channel     String   @db.VarChar(20)
+  payload     Json
+  sentAt      DateTime @default(now()) @db.Timestamptz
+  status      String   @default("sent") @db.VarChar(20)
+
+  @@index([recipientId, type])
+  @@map("notification_log")
+}

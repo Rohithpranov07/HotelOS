@@ -8,8 +8,11 @@
     "test": "turbo run test",
     "lint": "turbo run lint",
     "typecheck": "turbo run typecheck",
-    "migrate": "pnpm --filter auth-service exec prisma migrate dev",
-    "migrate:deploy": "pnpm --filter auth-service exec prisma migrate deploy",
+    "migrate": "pnpm --filter auth-service db:migrate",
+    "migrate:deploy": "pnpm --filter auth-service db:migrate:deploy",
+    "db:generate": "pnpm --filter auth-service db:generate",
+    "db:studio": "pnpm --filter auth-service db:studio",
+    "db:reset": "pnpm --filter auth-service db:reset",
     "seed": "tsx scripts/seed.ts",
     "seed:demo": "tsx scripts/seed-demo.ts",
     "docker:up": "docker compose up -d",
@@ -17,19 +20,29 @@
     "prepare": "husky || true"
   },
   "devDependencies": {
-    "turbo": "^2.3.0",
-    "typescript": "^5.4.0",
-    "eslint": "^8.57.0",
+    "@faker-js/faker": "^10.4.0",
+    "@prisma/client": "^6.19.3",
+    "@types/bcryptjs": "^3.0.0",
+    "@types/node": "^20.19.41",
     "@typescript-eslint/eslint-plugin": "^7.0.0",
     "@typescript-eslint/parser": "^7.0.0",
-    "prettier": "^3.2.0",
+    "bcryptjs": "^3.0.3",
+    "eslint": "^8.57.0",
     "husky": "^9.0.0",
     "lint-staged": "^15.0.0",
-    "tsx": "^4.0.0"
+    "prettier": "^3.2.0",
+    "tsx": "^4.0.0",
+    "turbo": "^2.3.0",
+    "typescript": "^5.4.0"
   },
   "lint-staged": {
-    "*.{ts,tsx,js,jsx}": ["prettier --write", "eslint --fix"],
-    "*.{json,md,yml,yaml}": ["prettier --write"]
+    "*.{ts,tsx,js,jsx}": [
+      "prettier --write",
+      "eslint --fix"
+    ],
+    "*.{json,md,yml,yaml}": [
+      "prettier --write"
+    ]
   },
   "engines": {
     "node": ">=20"

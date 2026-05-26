@@ -10,7 +10,16 @@
     "start": "node dist/index.js",
     "lint": "eslint \"src/**/*.ts\" --no-error-on-unmatched-pattern",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run --passWithNoTests"
+    "test": "vitest run --passWithNoTests",
+    "db:migrate": "prisma migrate dev",
+    "db:migrate:deploy": "prisma migrate deploy",
+    "db:generate": "prisma generate",
+    "db:studio": "prisma studio",
+    "db:reset": "prisma migrate reset --force"
+  },
+  "prisma": {
+    "schema": "prisma/schema.prisma",
+    "seed": "tsx ../../scripts/seed.ts"
   },
   "dependencies": {
     "@fastify/cors": "^9.0.1",
@@ -18,20 +27,22 @@
     "@fastify/jwt": "^8.0.0",
     "@fastify/rate-limit": "^9.1.0",
     "@hotel-os/types": "workspace:*",
+    "@prisma/client": "^6.19.3",
     "fastify": "^4.28.0",
     "pino": "^9.0.0",
     "pino-pretty": "^11.0.0",
+    "prisma": "^6.19.3",
     "zod": "^3.23.0"
   },
   "devDependencies": {
     "@hotel-os/config": "workspace:*",
     "@types/node": "^20.0.0",
+    "@typescript-eslint/eslint-plugin": "^7.18.0",
+    "@typescript-eslint/parser": "^7.18.0",
+    "eslint": "^8.57.0",
     "supertest": "^7.0.0",
     "tsx": "^4.0.0",
     "typescript": "^5.4.0",
-    "vitest": "^1.6.0",
-    "eslint": "^8.57.0",
-    "@typescript-eslint/parser": "^7.18.0",
-    "@typescript-eslint/eslint-plugin": "^7.18.0"
+    "vitest": "^1.6.0"
   }
 }

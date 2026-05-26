@@ -8,11 +8,31 @@ See [`Prompt_HotelOS.js`](./Prompt_HotelOS.js) for the source PRD/task generator
 ## Quickstart
 
 ```bash
-pnpm install              # install workspace
-cp .env.example .env      # fill in secrets as needed
-pnpm docker:up            # postgres + redis (Docker required)
-pnpm dev                  # run all apps/services via turborepo
+pnpm install                                              # install workspace
+cp .env.example .env                                      # fill in secrets
+cp services/auth-service/.env.example services/auth-service/.env
+pnpm docker:up                                            # postgres + redis (Docker required)
+pnpm migrate                                              # apply Prisma migrations
+pnpm seed                                                 # seed demo property + guests
+pnpm dev                                                  # run all apps/services
 ```
+
+## Database
+
+Schema lives at [`services/auth-service/prisma/schema.prisma`](./services/auth-service/prisma/schema.prisma) — auth-service owns migrations; all other services share the same Postgres via `@prisma/client`.
+
+```bash
+pnpm migrate              # prisma migrate dev (creates migration + applies)
+pnpm migrate:deploy       # prisma migrate deploy (CI/prod)
+pnpm db:generate          # regenerate Prisma client after schema edits
+pnpm db:studio            # open Prisma Studio (browse data)
+pnpm db:reset             # ⚠ drop + recreate + re-seed
+pnpm seed                 # populate demo property/rooms/menu/guests/reservations
+```
+
+Demo credentials (after `pnpm seed`):
+- Staff: `manager@grandchennai.com` / `demo1234`
+- Guest: `+919876543210` (any 6-digit OTP in dev mode)
 
 ## Workspace layout
 
@@ -38,6 +58,7 @@ hotel-os/
 
 ## Status
 
-**T-01 complete** — monorepo scaffold, all service stubs, mobile/web/AI app shells, Docker Compose with Kong gateway, CI.
+- **T-01 complete** — monorepo scaffold, all service stubs, mobile/web/AI app shells, Docker Compose with Kong gateway, CI.
+- **T-02 complete** — Prisma 6 schema (14 tables, 7 enums), seed script with Indian demo data, db management scripts.
 
-Next: T-02 Prisma schema + migrations.
+Next: T-03 auth-service (OTP + JWT).
