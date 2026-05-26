@@ -1,0 +1,11 @@
+{
+  "name": "@hotel-os/config",
+  "version": "0.0.0",
+  "private": true,
+  "main": "index.js",
+  "files": [
+    "typescript.json",
+    "eslint.js",
+    "prettier.js"
+  ]
+}

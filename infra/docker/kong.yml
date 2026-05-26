@@ -1,0 +1,64 @@
+_format_version: "3.0"
+_transform: true
+
+services:
+  - name: auth-service
+    url: http://auth-service:3001
+    routes:
+      - name: auth-route
+        paths: ["/api/v1/auth"]
+        strip_path: false
+
+  - name: booking-service
+    url: http://booking-service:3002
+    routes:
+      - name: reservations-route
+        paths: ["/api/v1/reservations", "/api/v1/guests", "/webhooks/cloudbeds"]
+        strip_path: false
+
+  - name: orders-service
+    url: http://orders-service:3003
+    routes:
+      - name: orders-route
+        paths: ["/api/v1/orders", "/api/v1/menu", "/api/v1/housekeeping", "/api/v1/staff/tasks"]
+        strip_path: false
+
+  - name: access-service
+    url: http://access-service:3004
+    routes:
+      - name: keys-route
+        paths: ["/api/v1/keys"]
+        strip_path: false
+
+  - name: loyalty-service
+    url: http://loyalty-service:3005
+    routes:
+      - name: loyalty-route
+        paths: ["/api/v1/loyalty"]
+        strip_path: false
+
+  - name: ai-service
+    url: http://ai-service:3006
+    routes:
+      - name: concierge-route
+        paths: ["/api/v1/concierge", "/api/v1/ai"]
+        strip_path: false
+
+  - name: payments-service
+    url: http://payments-service:3007
+    routes:
+      - name: payments-route
+        paths: ["/api/v1/payments", "/api/v1/feedback"]
+        strip_path: false
+
+plugins:
+  - name: cors
+    config:
+      origins: ["*"]
+      methods: ["GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"]
+      headers: ["Authorization", "Content-Type"]
+      credentials: true
+  - name: rate-limiting
+    config:
+      minute: 600
+      policy: local

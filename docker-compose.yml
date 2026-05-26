@@ -1,0 +1,155 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: hoteldb
+      POSTGRES_USER: hoteluser
+      POSTGRES_PASSWORD: hotelpass
+    ports:
+      - "5432:5432"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U hoteluser -d hoteldb"]
+      interval: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    command: redis-server --save "" --appendonly no
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      retries: 5
+
+  auth-service:
+    build:
+      context: .
+      dockerfile: services/auth-service/Dockerfile
+    ports:
+      - "3001:3001"
+    environment:
+      DATABASE_URL: postgresql://hoteluser:hotelpass@postgres:5432/hoteldb
+      REDIS_URL: redis://redis:6379
+      PORT: 3001
+      NODE_ENV: development
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+
+  booking-service:
+    build:
+      context: .
+      dockerfile: services/booking-service/Dockerfile
+    ports:
+      - "3002:3002"
+    environment:
+      DATABASE_URL: postgresql://hoteluser:hotelpass@postgres:5432/hoteldb
+      REDIS_URL: redis://redis:6379
+      PORT: 3002
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  orders-service:
+    build:
+      context: .
+      dockerfile: services/orders-service/Dockerfile
+    ports:
+      - "3003:3003"
+    environment:
+      DATABASE_URL: postgresql://hoteluser:hotelpass@postgres:5432/hoteldb
+      REDIS_URL: redis://redis:6379
+      PORT: 3003
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+
+  access-service:
+    build:
+      context: .
+      dockerfile: services/access-service/Dockerfile
+    ports:
+      - "3004:3004"
+    environment:
+      DATABASE_URL: postgresql://hoteluser:hotelpass@postgres:5432/hoteldb
+      REDIS_URL: redis://redis:6379
+      PORT: 3004
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  loyalty-service:
+    build:
+      context: .
+      dockerfile: services/loyalty-service/Dockerfile
+    ports:
+      - "3005:3005"
+    environment:
+      DATABASE_URL: postgresql://hoteluser:hotelpass@postgres:5432/hoteldb
+      REDIS_URL: redis://redis:6379
+      PORT: 3005
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  ai-service:
+    build:
+      context: ./apps/ai-service
+    ports:
+      - "3006:3006"
+    environment:
+      REDIS_URL: redis://redis:6379
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      PINECONE_API_KEY: ${PINECONE_API_KEY:-}
+    depends_on:
+      redis:
+        condition: service_started
+
+  payments-service:
+    build:
+      context: .
+      dockerfile: services/payments-service/Dockerfile
+    ports:
+      - "3007:3007"
+    environment:
+      DATABASE_URL: postgresql://hoteluser:hotelpass@postgres:5432/hoteldb
+      REDIS_URL: redis://redis:6379
+      PORT: 3007
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  kong:
+    image: kong:3.7-alpine
+    environment:
+      KONG_DATABASE: "off"
+      KONG_DECLARATIVE_CONFIG: /etc/kong/kong.yml
+      KONG_PROXY_ACCESS_LOG: /dev/stdout
+      KONG_ADMIN_ACCESS_LOG: /dev/stdout
+      KONG_PROXY_ERROR_LOG: /dev/stderr
+      KONG_ADMIN_ERROR_LOG: /dev/stderr
+      KONG_ADMIN_LISTEN: "0.0.0.0:8001"
+    volumes:
+      - ./infra/docker/kong.yml:/etc/kong/kong.yml:ro
+    ports:
+      - "8000:8000"
+      - "8001:8001"
+    depends_on:
+      - auth-service
+      - booking-service
+      - orders-service
+      - access-service
+      - loyalty-service
+      - payments-service
+      - ai-service
+
+volumes:
+  pg_data:

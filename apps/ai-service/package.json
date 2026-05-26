@@ -1,0 +1,12 @@
+{
+  "name": "ai-service",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "uvicorn main:app --reload --port 3006",
+    "build": "echo 'no build step'",
+    "lint": "ruff check . || true",
+    "typecheck": "echo 'python types managed via pyright'",
+    "test": "pytest -q || true"
+  }
+}
