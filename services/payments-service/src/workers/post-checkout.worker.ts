@@ -24,6 +24,17 @@ async function deliverInvoice(reservationId: string): Promise<{
   const result = await renderAndUploadInvoice(prisma, reservationId);
   if (!result) throw new Error(`Reservation ${reservationId} not found`);
 
+  // Stamp the invoice pointer on the reservation so future reads (staff
+  // dashboard, manual re-sends, guest receipts page) don't have to re-render.
+  await prisma.reservation.update({
+    where: { id: reservationId },
+    data: {
+      invoiceUrl: result.upload.url,
+      invoiceNumber: result.data.invoiceNumber,
+      invoiceGeneratedAt: new Date(result.data.generatedAt),
+    },
+  });
+
   const reservation = await prisma.reservation.findUnique({
     where: { id: reservationId },
     include: { guest: true },

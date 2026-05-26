@@ -132,11 +132,34 @@ export async function paymentRoutes(app: FastifyInstance): Promise<void> {
       const user = request.user!;
       const reservation = await prisma.reservation.findUnique({
         where: { id: request.params.reservationId },
-        select: { id: true, guestId: true, propertyId: true },
+        select: {
+          id: true,
+          guestId: true,
+          propertyId: true,
+          invoiceUrl: true,
+          invoiceNumber: true,
+          invoiceGeneratedAt: true,
+        },
       });
       if (!reservation) return reply.status(404).send(errBody('NOT_FOUND', 'Reservation not found'));
       if (user.userType === 'guest' && reservation.guestId !== user.userId) {
         return reply.status(403).send(errBody('FORBIDDEN', 'Not your reservation'));
+      }
+
+      // Cache hit: return the stamped invoice without re-rendering. The
+      // post-checkout worker writes these fields once the PDF lands in S3.
+      if (
+        reservation.invoiceUrl &&
+        reservation.invoiceNumber &&
+        reservation.invoiceGeneratedAt &&
+        request.query.download !== '1'
+      ) {
+        return reply.send({
+          invoice_url: reservation.invoiceUrl,
+          invoice_number: reservation.invoiceNumber,
+          generated_at: reservation.invoiceGeneratedAt.toISOString(),
+          cached: true,
+        });
       }
 
       try {
@@ -155,8 +178,19 @@ export async function paymentRoutes(app: FastifyInstance): Promise<void> {
           return reply.send(result.pdf);
         }
 
-        // Queue email delivery — useful when the staff manually re-renders
-        // an invoice for a checked-out guest who never received it.
+        // Stamp the invoice pointer on the reservation so subsequent reads
+        // hit the cache branch above.
+        await prisma.reservation.update({
+          where: { id: reservation.id },
+          data: {
+            invoiceUrl: result.upload.url,
+            invoiceNumber: result.data.invoiceNumber,
+            invoiceGeneratedAt: new Date(result.data.generatedAt),
+          },
+        });
+
+        // Queue email delivery — useful when staff manually re-renders an
+        // invoice for a checked-out guest who never received it.
         await enqueueInvoiceDelivery(reservation.id);
 
         return reply.send({

@@ -218,6 +218,9 @@ model Reservation {
   specialRequests  String?
   aiPreBrief       String?
   mobileKeyId      String?           @db.VarChar(100)
+  invoiceUrl       String?           @db.VarChar(500)
+  invoiceNumber    String?           @db.VarChar(50)
+  invoiceGeneratedAt DateTime?       @db.Timestamptz
   isDnd            Boolean           @default(false)
   createdAt        DateTime          @default(now()) @db.Timestamptz
   updatedAt        DateTime          @updatedAt @db.Timestamptz
