@@ -34,7 +34,6 @@ const ORDER_TYPES = [
   'housekeeping',
   'amenity',
   'maintenance',
-  'spa',
 ] as const;
 
 const OrderItemSchema = z.object({
@@ -69,6 +68,30 @@ type OrderRow = Prisma.OrderGetPayload<{
   include: { assignedStaff: { select: { id: true; fullName: true; role: true } } };
 }>;
 
+function reconstructStatusHistory(o: OrderRow): Array<{ status: string; at: string }> {
+  const history: Array<{ status: string; at: string }> = [
+    { status: 'pending', at: o.createdAt.toISOString() },
+  ];
+  if (o.acceptedAt) history.push({ status: 'accepted', at: o.acceptedAt.toISOString() });
+  if (o.status === 'in_progress' || o.status === 'completed' || o.status === 'cancelled') {
+    // We don't persist in_progress timestamps separately; updatedAt is the best signal
+    // when the current status is in_progress, otherwise use completedAt/now as a bound.
+    if (o.status === 'in_progress') {
+      history.push({ status: 'in_progress', at: o.updatedAt.toISOString() });
+    } else if (o.completedAt) {
+      // Insert in_progress between accepted and completed using updatedAt only if it
+      // sits between the two — otherwise it's collapsed and we just record the terminal.
+      if (o.acceptedAt && o.updatedAt > o.acceptedAt && o.updatedAt < o.completedAt) {
+        history.push({ status: 'in_progress', at: o.updatedAt.toISOString() });
+      }
+      history.push({ status: o.status, at: o.completedAt.toISOString() });
+    } else if (o.status === 'cancelled') {
+      history.push({ status: 'cancelled', at: o.updatedAt.toISOString() });
+    }
+  }
+  return history;
+}
+
 function toDto(o: OrderRow) {
   return {
     id: o.id,
@@ -91,6 +114,7 @@ function toDto(o: OrderRow) {
     assigned_staff: o.assignedStaff
       ? { id: o.assignedStaff.id, fullName: o.assignedStaff.fullName, role: o.assignedStaff.role }
       : null,
+    status_history: reconstructStatusHistory(o),
   };
 }
 
@@ -140,6 +164,7 @@ export async function orderRoutes(app: FastifyInstance): Promise<void> {
     });
 
     // Realtime: notify property staff room of the new task.
+    // TODO(notifications-service): also send FCM push to assigned staff.
     emitNewTask(app.io, reservation.propertyId, {
       orderId: order.id,
       type: order.type,

@@ -29,6 +29,7 @@ export function startSlaWorker(io: AppIO): Worker<SlaJobData> {
       if (kind === 'warning') {
         emitSlaWarning(io, propertyId, payload);
       } else {
+        // TODO(notifications-service): on breach, also FCM-push the property manager.
         emitSlaBreach(io, propertyId, payload);
       }
       return { kind, orderId };

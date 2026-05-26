@@ -79,7 +79,7 @@ export async function menuRoutes(app: FastifyInstance): Promise<void> {
       ];
     }
 
-    const items = await prisma.menuItem.findMany({
+    let items = await prisma.menuItem.findMany({
       where,
       orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
     });
@@ -94,9 +94,12 @@ export async function menuRoutes(app: FastifyInstance): Promise<void> {
       });
       const flags = guest?.dietaryFlags ?? [];
       if (flags.length > 0) {
-        recommended = items
-          .filter((i) => i.dietaryTags.some((t) => flags.includes(t)))
-          .slice(0, 3);
+        const matchesProfile = (i: MenuItemRow) => i.dietaryTags.some((t) => flags.includes(t));
+        recommended = items.filter(matchesProfile).slice(0, 3);
+        // Reorder: matching items first, then the rest (stable within each group).
+        const matching = items.filter(matchesProfile);
+        const rest = items.filter((i) => !matchesProfile(i));
+        items = [...matching, ...rest];
       }
     }
 
