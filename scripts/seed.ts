@@ -20,69 +20,30 @@ const ROOM_TYPES: Array<{ type: string; baseRate: number; max: number }> = [
 ];
 
 const MENU_ITEMS = [
-  {
-    name: 'Masala Dosa',
-    description: 'Crispy rice crepe with spiced potato filling, sambar and coconut chutney',
-    price: 280,
-    category: 'breakfast',
-    dietaryTags: ['vegetarian', 'gluten-free'],
-    allergens: [],
-    prepTimeMinutes: 12,
-  },
-  {
-    name: 'Idli Sambar (4 pcs)',
-    description: 'Steamed rice cakes with lentil soup and coconut chutney',
-    price: 220,
-    category: 'breakfast',
-    dietaryTags: ['vegetarian', 'gluten-free'],
-    allergens: [],
-    prepTimeMinutes: 8,
-  },
-  {
-    name: 'English Breakfast',
-    description: 'Eggs your way, toast, beans, grilled tomato, mushrooms',
-    price: 480,
-    category: 'breakfast',
-    dietaryTags: [],
-    allergens: ['gluten', 'eggs'],
-    prepTimeMinutes: 18,
-  },
-  {
-    name: 'Club Sandwich',
-    description: 'Triple-decker with grilled chicken, bacon, egg, lettuce, tomato',
-    price: 420,
-    category: 'mains',
-    dietaryTags: [],
-    allergens: ['gluten', 'eggs'],
-    prepTimeMinutes: 20,
-  },
-  {
-    name: 'Paneer Butter Masala',
-    description: 'Cottage cheese in rich tomato-butter gravy, served with naan',
-    price: 380,
-    category: 'mains',
-    dietaryTags: ['vegetarian'],
-    allergens: ['dairy', 'gluten'],
-    prepTimeMinutes: 22,
-  },
-  {
-    name: 'Filter Coffee',
-    description: 'South Indian decoction coffee with milk',
-    price: 120,
-    category: 'beverages',
-    dietaryTags: ['vegetarian'],
-    allergens: ['dairy'],
-    prepTimeMinutes: 5,
-  },
-  {
-    name: 'Fresh Lime Soda',
-    description: 'Fresh-squeezed lime with soda, salt or sugar',
-    price: 140,
-    category: 'beverages',
-    dietaryTags: ['vegetarian', 'vegan', 'gluten-free'],
-    allergens: [],
-    prepTimeMinutes: 3,
-  },
+  // ─── BREAKFAST ───
+  { name: 'Masala Dosa', description: 'Crispy rice crepe with spiced potato filling, sambar and coconut chutney', price: 280, category: 'breakfast', dietaryTags: ['vegetarian', 'gluten-free'], allergens: [], prepTimeMinutes: 12 },
+  { name: 'Idli Sambar (4 pcs)', description: 'Steamed rice cakes with lentil soup and coconut chutney', price: 220, category: 'breakfast', dietaryTags: ['vegetarian', 'gluten-free'], allergens: [], prepTimeMinutes: 8 },
+  { name: 'English Breakfast', description: 'Eggs your way, toast, beans, grilled tomato, mushrooms', price: 480, category: 'breakfast', dietaryTags: [], allergens: ['gluten', 'eggs'], prepTimeMinutes: 18 },
+  { name: 'Oats Porridge', description: 'Creamy oats with fresh fruits, honey and nuts', price: 180, category: 'breakfast', dietaryTags: ['vegetarian'], allergens: ['gluten', 'nuts', 'dairy'], prepTimeMinutes: 8 },
+  { name: 'Poha', description: 'Flattened rice with onions, peanuts, curry leaves and lemon', price: 180, category: 'breakfast', dietaryTags: ['vegetarian', 'vegan', 'gluten-free'], allergens: ['nuts'], prepTimeMinutes: 10 },
+  { name: 'Paratha Platter', description: 'Two stuffed parathas with curd, pickle and butter', price: 260, category: 'breakfast', dietaryTags: ['vegetarian'], allergens: ['gluten', 'dairy'], prepTimeMinutes: 15 },
+  // ─── MAINS ───
+  { name: 'Club Sandwich', description: 'Triple-decker with grilled chicken, bacon, egg, lettuce, tomato', price: 420, category: 'mains', dietaryTags: [], allergens: ['gluten', 'eggs'], prepTimeMinutes: 20 },
+  { name: 'Paneer Butter Masala', description: 'Cottage cheese in rich tomato-butter gravy, served with naan', price: 380, category: 'mains', dietaryTags: ['vegetarian'], allergens: ['dairy', 'gluten'], prepTimeMinutes: 22 },
+  { name: 'Chicken Biryani', description: 'Fragrant basmati rice with marinated chicken, served with raita', price: 460, category: 'mains', dietaryTags: [], allergens: ['dairy'], prepTimeMinutes: 28 },
+  { name: 'Veg Hakka Noodles', description: 'Wok-tossed noodles with vegetables and Indo-Chinese sauces', price: 320, category: 'mains', dietaryTags: ['vegetarian', 'vegan'], allergens: ['gluten', 'soy'], prepTimeMinutes: 18 },
+  { name: 'Margherita Pizza', description: 'Wood-fired pizza with San Marzano tomato, mozzarella and basil', price: 440, category: 'mains', dietaryTags: ['vegetarian'], allergens: ['gluten', 'dairy'], prepTimeMinutes: 22 },
+  { name: 'Grilled Salmon', description: 'Atlantic salmon with lemon butter, mashed potato and greens', price: 880, category: 'mains', dietaryTags: ['gluten-free'], allergens: ['fish', 'dairy'], prepTimeMinutes: 25 },
+  { name: 'Caesar Salad', description: 'Romaine, parmesan, croutons, classic Caesar dressing', price: 320, category: 'mains', dietaryTags: [], allergens: ['gluten', 'dairy', 'eggs', 'fish'], prepTimeMinutes: 10 },
+  // ─── DESSERTS ───
+  { name: 'Gulab Jamun (2 pcs)', description: 'Warm milk dumplings in rose-cardamom syrup', price: 160, category: 'desserts', dietaryTags: ['vegetarian'], allergens: ['dairy', 'gluten'], prepTimeMinutes: 6 },
+  { name: 'Chocolate Brownie', description: 'Warm dark chocolate brownie with vanilla ice cream', price: 240, category: 'desserts', dietaryTags: ['vegetarian'], allergens: ['gluten', 'dairy', 'eggs'], prepTimeMinutes: 8 },
+  { name: 'Tiramisu', description: 'Espresso-soaked ladyfingers, mascarpone, cocoa', price: 280, category: 'desserts', dietaryTags: ['vegetarian'], allergens: ['gluten', 'dairy', 'eggs'], prepTimeMinutes: 5 },
+  { name: 'Fruit Platter', description: 'Seasonal Indian fruits, chilled', price: 220, category: 'desserts', dietaryTags: ['vegetarian', 'vegan', 'gluten-free'], allergens: [], prepTimeMinutes: 5 },
+  // ─── BEVERAGES ───
+  { name: 'Filter Coffee', description: 'South Indian decoction coffee with milk', price: 120, category: 'beverages', dietaryTags: ['vegetarian'], allergens: ['dairy'], prepTimeMinutes: 5 },
+  { name: 'Masala Chai', description: 'Spiced Indian tea with cardamom, ginger and milk', price: 100, category: 'beverages', dietaryTags: ['vegetarian'], allergens: ['dairy'], prepTimeMinutes: 5 },
+  { name: 'Fresh Lime Soda', description: 'Fresh-squeezed lime with soda, salt or sugar', price: 140, category: 'beverages', dietaryTags: ['vegetarian', 'vegan', 'gluten-free'], allergens: [], prepTimeMinutes: 3 },
 ];
 
 const STAFF_SEED: Array<{ email: string; fullName: string; role: StaffRole }> = [
