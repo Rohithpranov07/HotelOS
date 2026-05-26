@@ -16,6 +16,7 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "io.hotelosapp.mobile",
+      "googleServicesFile": "./GoogleService-Info.plist",
       "infoPlist": {
         "NSCameraUsageDescription": "We need your camera to scan your ID document for digital check-in.",
         "NSMicrophoneUsageDescription": "We need your microphone to record voice feedback.",
@@ -25,6 +26,7 @@
     },
     "android": {
       "package": "io.hotelosapp.mobile",
+      "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
         "foregroundImage": "./assets/icon.png",
         "backgroundColor": "#1B2A4A"

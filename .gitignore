@@ -15,6 +15,21 @@ build/
 .env.*.local
 !.env.example
 
+# secrets — never commit credentials
+*firebase-adminsdk*.json
+*service-account*.json
+*credentials*.json
+secrets/
+
+# Firebase mobile config — gitignored by default. For EAS production builds,
+# set the FIREBASE_GOOGLE_SERVICES_JSON / FIREBASE_GOOGLE_SERVICE_INFO_PLIST EAS secrets
+# or copy back into apps/mobile/ before `eas build`.
+apps/mobile/google-services.json
+apps/mobile/GoogleService-Info.plist
+/google-services.json
+/GoogleService-Info.plist
+
+
 # logs
 *.log
 npm-debug.log*
