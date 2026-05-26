@@ -1,0 +1,196 @@
+import type { FastifyInstance } from 'fastify';
+import { z } from 'zod';
+
+import { prisma } from '../lib/prisma.js';
+import { config } from '../config.js';
+import {
+  TIER_BENEFITS,
+  pointsToNextTier,
+  pointsToValue,
+} from '../lib/loyalty.js';
+import { LedgerService } from '../services/ledger.service.js';
+import { requireGuest } from '../middleware/auth.middleware.js';
+
+const errBody = (code: string, message: string, extra: Record<string, unknown> = {}) => ({
+  error: { code, message, ...extra },
+});
+
+const RedeemSchema = z.object({
+  reservation_id: z.string().uuid(),
+  points: z.number().int().min(1),
+  apply_to: z.enum(['folio', 'fnb_order']),
+});
+
+const StatementQuerySchema = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+  per_page: z.coerce.number().int().min(1).max(100).default(20),
+});
+
+export async function loyaltyRoutes(app: FastifyInstance): Promise<void> {
+  const ledger = new LedgerService(prisma);
+
+  // ─── GET /summary ───────────────────────────────────────────────
+  app.get('/summary', { preHandler: requireGuest }, async (request, reply) => {
+    const user = request.user!;
+    const guest = await prisma.guest.findUnique({ where: { id: user.userId } });
+    if (!guest) return reply.status(404).send(errBody('GUEST_NOT_FOUND', 'Guest not found'));
+
+    const tierInfo = pointsToNextTier(guest.lifetimePoints);
+
+    // Points expiring within 30 days (sum the next batch out).
+    const horizon = new Date();
+    horizon.setDate(horizon.getDate() + 30);
+    const expiring = await prisma.loyaltyTransaction.aggregate({
+      where: {
+        guestId: guest.id,
+        isExpired: false,
+        points: { gt: 0 },
+        expiresAt: { lte: horizon, not: null },
+      },
+      _sum: { points: true },
+      _min: { expiresAt: true },
+    });
+
+    // "this stay earned" — sum positive earn/bonus on the active reservation.
+    const activeReservation = await prisma.reservation.findFirst({
+      where: {
+        guestId: guest.id,
+        status: { in: ['confirmed', 'pre_checked_in', 'checked_in'] },
+      },
+      orderBy: { checkInDate: 'asc' },
+      select: { id: true },
+    });
+    let thisStayEarned = 0;
+    if (activeReservation) {
+      const stayAgg = await prisma.loyaltyTransaction.aggregate({
+        where: {
+          guestId: guest.id,
+          reservationId: activeReservation.id,
+          type: { in: ['earn', 'bonus'] },
+          points: { gt: 0 },
+        },
+        _sum: { points: true },
+      });
+      thisStayEarned = stayAgg._sum.points ?? 0;
+    }
+
+    return reply.send({
+      current_points: guest.loyaltyPoints,
+      lifetime_points: guest.lifetimePoints,
+      tier: guest.loyaltyTier,
+      next_tier: tierInfo.next,
+      points_to_next_tier: tierInfo.pointsRemaining,
+      tier_progress_pct: tierInfo.progressPct,
+      points_expiring_soon:
+        expiring._sum.points && expiring._sum.points > 0 && expiring._min.expiresAt
+          ? {
+              amount: expiring._sum.points,
+              expiry_date: expiring._min.expiresAt.toISOString().slice(0, 10),
+            }
+          : null,
+      this_stay_earned: thisStayEarned,
+      redemption_value: pointsToValue(guest.loyaltyPoints),
+      tier_benefits: TIER_BENEFITS[guest.loyaltyTier],
+    });
+  });
+
+  // ─── GET /statement ─────────────────────────────────────────────
+  app.get('/statement', { preHandler: requireGuest }, async (request, reply) => {
+    const user = request.user!;
+    const parsed = StatementQuerySchema.safeParse(request.query);
+    if (!parsed.success) {
+      return reply
+        .status(400)
+        .send(errBody('VALIDATION_ERROR', 'Invalid query', { details: parsed.error.issues }));
+    }
+    const { page, per_page } = parsed.data;
+    const skip = (page - 1) * per_page;
+
+    const [rows, total] = await Promise.all([
+      prisma.loyaltyTransaction.findMany({
+        where: { guestId: user.userId },
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: per_page,
+      }),
+      prisma.loyaltyTransaction.count({ where: { guestId: user.userId } }),
+    ]);
+
+    return reply.send({
+      data: rows.map((r) => ({
+        id: r.id,
+        type: r.type,
+        points: r.points,
+        balance_after: r.balanceAfter,
+        reason: r.reason,
+        created_at: r.createdAt.toISOString(),
+      })),
+      meta: { page, per_page, total },
+    });
+  });
+
+  // ─── POST /redeem ───────────────────────────────────────────────
+  app.post('/redeem', { preHandler: requireGuest }, async (request, reply) => {
+    const user = request.user!;
+    const parsed = RedeemSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply
+        .status(400)
+        .send(errBody('VALIDATION_ERROR', 'Invalid body', { details: parsed.error.issues }));
+    }
+    if (parsed.data.points < config.minRedemptionPoints) {
+      return reply.status(400).send(
+        errBody('MIN_REDEMPTION', `Minimum redemption is ${config.minRedemptionPoints} points`, {
+          min: config.minRedemptionPoints,
+        }),
+      );
+    }
+
+    const reservation = await prisma.reservation.findUnique({
+      where: { id: parsed.data.reservation_id },
+    });
+    if (!reservation) {
+      return reply.status(404).send(errBody('RESERVATION_NOT_FOUND', 'Not found'));
+    }
+    if (reservation.guestId !== user.userId) {
+      return reply.status(403).send(errBody('FORBIDDEN', 'Not your reservation'));
+    }
+
+    const result = await ledger.redeemPoints(
+      {
+        guestId: user.userId,
+        propertyId: reservation.propertyId,
+        reservationId: reservation.id,
+        points: parsed.data.points,
+        reason: `Redemption against ${parsed.data.apply_to}`,
+      },
+      config.minRedemptionPoints,
+    );
+
+    if (!result.success) {
+      return reply
+        .status(400)
+        .send(errBody('INSUFFICIENT_BALANCE', 'Not enough points', { balance: result.newBalance }));
+    }
+
+    // Apply as a negative folio line item: reduce the reservation's
+    // totalAmount so the next invoice render reflects the redemption.
+    // Note: paidAmount remains untouched — the redemption discounts the bill,
+    // it doesn't pay the bill.
+    await prisma.reservation.update({
+      where: { id: reservation.id },
+      data: {
+        totalOtherAmount: { decrement: result.rupeesValue },
+        totalAmount: { decrement: result.rupeesValue },
+      },
+    });
+
+    return reply.send({
+      success: true,
+      points_redeemed: parsed.data.points,
+      new_balance: result.newBalance,
+      rupees_value: result.rupeesValue,
+      applied_to: parsed.data.apply_to,
+    });
+  });
+}
