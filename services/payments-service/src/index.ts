@@ -2,17 +2,26 @@ import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import helmet from '@fastify/helmet';
 
-const SERVICE_NAME = 'payments-service';
-const PORT = Number(process.env.PORT ?? 3007);
+import { config, hasRazorpay, hasSendgrid, hasS3 } from './config.js';
+import { paymentRoutes } from './routes/payment.routes.js';
+import {
+  startBookingEventsWorker,
+  startInvoiceDeliveryWorker,
+} from './workers/post-checkout.worker.js';
 
-async function main() {
+const SERVICE_NAME = 'payments-service';
+
+export async function buildApp() {
   const app = Fastify({
     logger: {
       level: process.env.LOG_LEVEL ?? 'info',
       transport:
-        process.env.NODE_ENV === 'production'
+        config.nodeEnv === 'production'
           ? undefined
-          : { target: 'pino-pretty', options: { translateTime: 'HH:MM:ss', ignore: 'pid,hostname' } },
+          : {
+              target: 'pino-pretty',
+              options: { translateTime: 'HH:MM:ss', ignore: 'pid,hostname' },
+            },
     },
   });
 
@@ -23,17 +32,33 @@ async function main() {
     status: 'ok',
     service: SERVICE_NAME,
     timestamp: new Date().toISOString(),
+    providers: {
+      razorpay: hasRazorpay,
+      sendgrid: hasSendgrid,
+      s3: hasS3,
+    },
   }));
 
-  // TODO(T-XX): register route plugins here
+  await app.register(paymentRoutes, { prefix: '/api/v1/payments' });
 
+  return app;
+}
+
+async function main() {
+  const app = await buildApp();
   try {
-    await app.listen({ port: PORT, host: '0.0.0.0' });
-    app.log.info(`${SERVICE_NAME} listening on :${PORT}`);
+    await app.listen({ port: config.port, host: '0.0.0.0' });
+    if (config.workerEnabled) {
+      startBookingEventsWorker();
+      startInvoiceDeliveryWorker();
+      app.log.info('payments workers started');
+    }
   } catch (err) {
     app.log.error(err);
     process.exit(1);
   }
 }
 
-main();
+if (import.meta.url === `file://${process.argv[1]}`) {
+  main();
+}
