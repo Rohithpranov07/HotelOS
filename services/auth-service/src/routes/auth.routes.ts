@@ -69,7 +69,14 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
     }
     const { phone, otp } = parsed.data;
 
-    const result = await verifyOtp(phone, otp);
+    // Dev bypass: accept a hardcoded master OTP outside production while we wire up
+    // a real provider (e.g. Firebase Phone Auth). Remove once SMS is live.
+    const masterOtp = process.env.DEV_MASTER_OTP ?? '123456';
+    const isMasterBypass = config.nodeEnv !== 'production' && otp === masterOtp;
+
+    const result = isMasterBypass
+      ? ({ kind: 'ok' as const })
+      : await verifyOtp(phone, otp);
     if (result.kind === 'expired') {
       return reply.status(401).send(errBody('OTP_EXPIRED', 'OTP has expired'));
     }

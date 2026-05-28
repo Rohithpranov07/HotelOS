@@ -9,6 +9,11 @@ build/
 .turbo/
 *.tsbuildinfo
 
+# per-dev tooling configs
+.mcp.json
+.cursor/
+.windsurf/
+
 # env
 .env
 .env.local

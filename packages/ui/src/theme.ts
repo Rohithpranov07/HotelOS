@@ -20,6 +20,15 @@ export const Colors = {
   platinum: '#534AB7',
 } as const;
 
+export const Typography = {
+  h1: { fontSize: 28, fontWeight: '700' as const, color: Colors.navy },
+  h2: { fontSize: 22, fontWeight: '600' as const, color: Colors.navy },
+  h3: { fontSize: 18, fontWeight: '600' as const, color: Colors.navy },
+  body: { fontSize: 15, fontWeight: '400' as const, color: Colors.text },
+  small: { fontSize: 13, fontWeight: '400' as const, color: Colors.textSecondary },
+  tiny: { fontSize: 11, fontWeight: '400' as const, color: Colors.textTertiary },
+} as const;
+
 export const Spacing = { xs: 4, sm: 8, md: 12, lg: 16, xl: 24, xxl: 32 } as const;
 export const Radius = { sm: 6, md: 10, lg: 14, xl: 20, full: 9999 } as const;
 

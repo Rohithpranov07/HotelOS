@@ -13,14 +13,16 @@
     "typecheck": "tsc --noEmit"
   },
   "peerDependencies": {
+    "expo-haptics": "*",
     "react": "*",
     "react-native": "*"
   },
   "devDependencies": {
     "@hotel-os/config": "workspace:*",
-    "@types/react": "~18.2.0",
-    "react": "18.2.0",
-    "react-native": "0.74.0",
+    "@types/react": "~19.1.17",
+    "expo-haptics": "~15.0.8",
+    "react": "19.1.0",
+    "react-native": "0.81.5",
     "typescript": "^5.4.0"
   }
 }

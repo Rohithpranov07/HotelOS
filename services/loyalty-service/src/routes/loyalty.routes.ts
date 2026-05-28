@@ -15,11 +15,17 @@ const errBody = (code: string, message: string, extra: Record<string, unknown> =
   error: { code, message, ...extra },
 });
 
-const RedeemSchema = z.object({
-  reservation_id: z.string().uuid(),
-  points: z.number().int().min(1),
-  apply_to: z.enum(['folio', 'fnb_order']),
-});
+const RedeemSchema = z
+  .object({
+    reservation_id: z.string().uuid(),
+    points: z.number().int().min(1),
+    apply_to: z.enum(['folio', 'fnb_order']),
+    order_id: z.string().uuid().optional(),
+  })
+  .refine((v) => v.apply_to !== 'fnb_order' || !!v.order_id, {
+    message: 'order_id is required when apply_to is fnb_order',
+    path: ['order_id'],
+  });
 
 const StatementQuerySchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
@@ -156,13 +162,48 @@ export async function loyaltyRoutes(app: FastifyInstance): Promise<void> {
       return reply.status(403).send(errBody('FORBIDDEN', 'Not your reservation'));
     }
 
+    const rupeesValue = parsed.data.points / 10;
+
+    // Pre-flight: when redeeming against an FnB order, validate the order
+    // belongs to this reservation, is an F&B type, and has enough open value
+    // to cover the redemption. Doing this before debiting points avoids
+    // having to refund on failure.
+    let fnbOrder: { id: string; totalAmount: unknown } | null = null;
+    if (parsed.data.apply_to === 'fnb_order') {
+      const order = await prisma.order.findUnique({
+        where: { id: parsed.data.order_id! },
+        select: { id: true, reservationId: true, type: true, status: true, totalAmount: true },
+      });
+      if (!order || order.reservationId !== reservation.id) {
+        return reply.status(404).send(errBody('ORDER_NOT_FOUND', 'Order not found on reservation'));
+      }
+      if (order.type !== 'food' && order.type !== 'beverage') {
+        return reply.status(400).send(errBody('NOT_FNB_ORDER', 'Order is not an F&B order'));
+      }
+      if (order.status === 'cancelled') {
+        return reply.status(400).send(errBody('ORDER_CANCELLED', 'Order is cancelled'));
+      }
+      if (Number(order.totalAmount) < rupeesValue) {
+        return reply.status(400).send(
+          errBody('REDEMPTION_EXCEEDS_ORDER', 'Redemption value exceeds order total', {
+            order_total: Number(order.totalAmount),
+            redemption_value: rupeesValue,
+          }),
+        );
+      }
+      fnbOrder = { id: order.id, totalAmount: order.totalAmount };
+    }
+
     const result = await ledger.redeemPoints(
       {
         guestId: user.userId,
         propertyId: reservation.propertyId,
         reservationId: reservation.id,
         points: parsed.data.points,
-        reason: `Redemption against ${parsed.data.apply_to}`,
+        reason:
+          parsed.data.apply_to === 'fnb_order'
+            ? `Redemption against FnB order ${fnbOrder!.id}`
+            : 'Redemption against folio',
       },
       config.minRedemptionPoints,
     );
@@ -173,17 +214,31 @@ export async function loyaltyRoutes(app: FastifyInstance): Promise<void> {
         .send(errBody('INSUFFICIENT_BALANCE', 'Not enough points', { balance: result.newBalance }));
     }
 
-    // Apply as a negative folio line item: reduce the reservation's
-    // totalAmount so the next invoice render reflects the redemption.
-    // Note: paidAmount remains untouched — the redemption discounts the bill,
-    // it doesn't pay the bill.
-    await prisma.reservation.update({
-      where: { id: reservation.id },
-      data: {
-        totalOtherAmount: { decrement: result.rupeesValue },
-        totalAmount: { decrement: result.rupeesValue },
-      },
-    });
+    // Apply the discount. Folio redemption reduces the reservation total
+    // directly; FnB redemption also reduces the specific order's total and
+    // the reservation's F&B subtotal so the invoice line items reconcile.
+    // paidAmount is never touched — a redemption discounts the bill, it
+    // doesn't pay it.
+    if (parsed.data.apply_to === 'fnb_order' && fnbOrder) {
+      await prisma.$transaction([
+        prisma.order.update({
+          where: { id: fnbOrder.id },
+          data: { totalAmount: { decrement: result.rupeesValue } },
+        }),
+        prisma.reservation.update({
+          where: { id: reservation.id },
+          data: {
+            totalFnbAmount: { decrement: result.rupeesValue },
+            totalAmount: { decrement: result.rupeesValue },
+          },
+        }),
+      ]);
+    } else {
+      await prisma.reservation.update({
+        where: { id: reservation.id },
+        data: { totalAmount: { decrement: result.rupeesValue } },
+      });
+    }
 
     return reply.send({
       success: true,
@@ -191,6 +246,7 @@ export async function loyaltyRoutes(app: FastifyInstance): Promise<void> {
       new_balance: result.newBalance,
       rupees_value: result.rupeesValue,
       applied_to: parsed.data.apply_to,
+      order_id: parsed.data.apply_to === 'fnb_order' ? fnbOrder!.id : undefined,
     });
   });
 }

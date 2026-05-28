@@ -50,7 +50,8 @@
         {
           "cameraPermission": "Allow Hotel OS to access your camera for ID scanning."
         }
-      ]
+      ],
+      "expo-font"
     ],
     "experiments": {
       "typedRoutes": true

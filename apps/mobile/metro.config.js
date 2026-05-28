@@ -7,12 +7,15 @@ const workspaceRoot = path.resolve(projectRoot, '../..');
 
 const config = getDefaultConfig(projectRoot);
 
-// Monorepo: watch workspace root and resolve node_modules from both
+// Monorepo + pnpm: watch the workspace, follow symlinks into .pnpm, and
+// let Metro walk up node_modules so transitive deps (e.g. @babel/runtime,
+// react-native-css-interop) resolve through the pnpm store.
 config.watchFolders = [workspaceRoot];
 config.resolver.nodeModulesPaths = [
   path.resolve(projectRoot, 'node_modules'),
   path.resolve(workspaceRoot, 'node_modules'),
 ];
-config.resolver.disableHierarchicalLookup = true;
+config.resolver.disableHierarchicalLookup = false;
+config.resolver.unstable_enableSymlinks = true;
 
 module.exports = withNativeWind(config, { input: './global.css' });

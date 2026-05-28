@@ -310,6 +310,34 @@ export async function reservationRoutes(app: FastifyInstance): Promise<void> {
     },
   );
 
+  // ─── PATCH /:id/dnd (guest) ────────────────────────────────────
+  app.patch<{ Params: { id: string }; Body: unknown }>(
+    '/:id/dnd',
+    { preHandler: requireAuth },
+    async (request, reply) => {
+      const user = request.user!;
+      const parsed = z.object({ enabled: z.boolean() }).safeParse(request.body);
+      if (!parsed.success) {
+        return reply
+          .status(400)
+          .send(errBody('VALIDATION_ERROR', 'Invalid request body', { details: parsed.error.issues }));
+      }
+      const reservation = await prisma.reservation.findUnique({
+        where: { id: request.params.id },
+      });
+      if (!reservation) return reply.status(404).send(errBody('NOT_FOUND', 'Reservation not found'));
+      if (user.userType === 'guest' && reservation.guestId !== user.userId) {
+        return reply.status(403).send(errBody('FORBIDDEN', 'Not your reservation'));
+      }
+      const updated = await prisma.reservation.update({
+        where: { id: reservation.id },
+        data: { isDnd: parsed.data.enabled },
+        include: { room: true },
+      });
+      return reply.send(toReservationDto(updated));
+    },
+  );
+
   // ─── GET /:id/folio ────────────────────────────────────────────
   app.get<{ Params: { id: string } }>(
     '/:id/folio',
