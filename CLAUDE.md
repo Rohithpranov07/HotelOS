@@ -25,6 +25,9 @@
 - Logging: Pino with structured JSON. Never `console.log` in production code.
 - Tests: Vitest for Node services, Pytest for Python. Every exported function needs at least one test.
 
+## Mobile conventions (apps/mobile)
+- NativeWind (`jsxImportSource: 'nativewind'`) intercepts the `style` prop on every component. NEVER use the function form `style={({ pressed }) => [...]}` — NativeWind drops it and the component loses its own margin/padding/background/border/flexDirection (collapses to a default full-width column). Always pass a static object/array: `style={[styles.card, disabled && { opacity: 0.4 }]}`. For pressed feedback use state or Reanimated, not the `style` callback.
+
 ## API conventions
 - Base path: `/api/v1`
 - All timestamps: ISO 8601 UTC strings

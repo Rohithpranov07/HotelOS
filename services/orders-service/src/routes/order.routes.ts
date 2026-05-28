@@ -61,6 +61,9 @@ const StatusUpdateSchema = z.object({
 
 const RateSchema = z.object({
   rating: z.number().int().min(1).max(5),
+  mood: z.number().int().min(1).max(5).optional(),
+  sentiment: z.enum(['positive', 'neutral', 'negative']).optional(),
+  tags: z.array(z.string().max(40)).max(8).optional(),
   feedback: z.string().max(1000).optional(),
 });
 
@@ -107,6 +110,9 @@ function toDto(o: OrderRow) {
     accepted_at: o.acceptedAt?.toISOString() ?? null,
     completed_at: o.completedAt?.toISOString() ?? null,
     guest_rating: o.guestRating,
+    guest_mood: o.guestMood,
+    guest_sentiment: o.guestSentiment,
+    guest_feedback_tags: o.guestFeedbackTags,
     guest_feedback: o.guestFeedback,
     notes: o.notes,
     source: o.source,
@@ -336,6 +342,9 @@ export async function orderRoutes(app: FastifyInstance): Promise<void> {
         where: { id: order.id },
         data: {
           guestRating: parsed.data.rating,
+          guestMood: parsed.data.mood ?? parsed.data.rating,
+          guestSentiment: parsed.data.sentiment ?? null,
+          guestFeedbackTags: parsed.data.tags ?? [],
           guestFeedback: parsed.data.feedback ?? null,
         },
         include: { assignedStaff: { select: { id: true, fullName: true, role: true } } },

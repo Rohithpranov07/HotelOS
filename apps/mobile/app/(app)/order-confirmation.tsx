@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
+  Animated,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -35,6 +36,7 @@ export default function TrackOrderScreen() {
   const { orderId } = useLocalSearchParams<{ orderId?: string }>();
   const activeOrders = useOrdersStore((s) => s.activeOrders);
   const history = useOrdersStore((s) => s.orderHistory);
+  const enqueueFeedback = useOrdersStore((s) => s.enqueueFeedback);
   const reservation = useReservationStore((s) => s.reservation);
 
   const order: Order | undefined = useMemo(() => {
@@ -42,6 +44,14 @@ export default function TrackOrderScreen() {
     if (orderId) return all.find((o) => o.id === orderId);
     return activeOrders[0] ?? history[0];
   }, [activeOrders, history, orderId]);
+
+  // A delivered, not-yet-rated order should always surface the feedback prompt —
+  // even when the guest lands here on an order that completed earlier.
+  useEffect(() => {
+    if (order && order.status === 'completed' && !order.guest_mood && !order.guest_rating) {
+      enqueueFeedback(order);
+    }
+  }, [order?.id, order?.status, order?.guest_mood, order?.guest_rating, enqueueFeedback]);
 
   // Live ETA countdown
   const [now, setNow] = useState(Date.now());
@@ -78,6 +88,12 @@ export default function TrackOrderScreen() {
   const total = subtotal + service;
   const shortId = order.id.slice(0, 8).toUpperCase();
 
+  // Fraction of the way through the kitchen SLA — drives the live prep bar.
+  const createdMs = new Date(order.created_at).getTime();
+  const slaMs = order.sla_deadline ? new Date(order.sla_deadline).getTime() : createdMs;
+  const prepProgress =
+    slaMs > createdMs ? Math.min(1, Math.max(0.04, (now - createdMs) / (slaMs - createdMs))) : 0;
+
   return (
     <View style={styles.root}>
       <SafeAreaView style={{ flex: 1 }} edges={['top']}>
@@ -91,7 +107,11 @@ export default function TrackOrderScreen() {
             <Ionicons name="chevron-back" size={22} color={Luxe.ivory} />
           </Pressable>
           <View style={styles.statusPill}>
-            <View style={[styles.dot, isDelivered ? styles.dotDone : styles.dotLive]} />
+            {isDelivered ? (
+              <View style={[styles.dot, styles.dotDone]} />
+            ) : (
+              <PulsingDot color={Luxe.amberGlow} size={6} />
+            )}
             <Text style={styles.statusText}>
               {(STEPS[activeIdx]?.label ?? 'TRACKING').toUpperCase()}
             </Text>
@@ -116,10 +136,13 @@ export default function TrackOrderScreen() {
               {isDelivered ? 'Your tray has arrived.' : STEPS[activeIdx]?.phrase}
             </Text>
             {!isDelivered ? (
-              <View style={styles.etaRow}>
-                <Text style={styles.etaValue}>{minutesLeft}</Text>
-                <Text style={styles.etaUnit}>MIN LEFT</Text>
-              </View>
+              <>
+                <View style={styles.etaRow}>
+                  <Text style={styles.etaValue}>{minutesLeft}</Text>
+                  <Text style={styles.etaUnit}>MIN LEFT</Text>
+                </View>
+                <PrepBar progress={prepProgress} />
+              </>
             ) : (
               <Text style={styles.etaItalic}>
                 Tap below to rate this dish when you've had a moment.
@@ -160,6 +183,9 @@ export default function TrackOrderScreen() {
               })}
             </View>
           </View>
+
+          {/* LIVE STATUS FEED */}
+          <StatusFeed order={order} activeIdx={activeIdx} isDelivered={isDelivered} now={now} />
 
           {/* ORDER DETAILS */}
           <View style={styles.section}>
@@ -260,7 +286,13 @@ export default function TrackOrderScreen() {
             <Text style={styles.ctaGhostLabel}>BACK TO MENU</Text>
           </Pressable>
           <Pressable
-            onPress={() => router.replace('/(app)/orders')}
+            onPress={() => {
+              if (isDelivered && !order.guest_mood && !order.guest_rating) {
+                enqueueFeedback(order);
+              } else {
+                router.replace('/(app)/orders');
+              }
+            }}
             style={[styles.cta, styles.ctaPrimary]}
           >
             <LinearGradient
@@ -269,10 +301,163 @@ export default function TrackOrderScreen() {
               end={{ x: 1, y: 1 }}
               style={StyleSheet.absoluteFill}
             />
-            <Text style={styles.ctaPrimaryLabel}>ALL ORDERS</Text>
+            <Text style={styles.ctaPrimaryLabel}>
+              {isDelivered && !order.guest_mood && !order.guest_rating ? 'RATE THIS DISH' : 'ALL ORDERS'}
+            </Text>
           </Pressable>
         </View>
       </SafeAreaView>
+    </View>
+  );
+}
+
+function PulsingDot({ color = Luxe.amberGlow, size = 6 }: { color?: string; size?: number }) {
+  const pulse = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulse, { toValue: 1, duration: 1100, useNativeDriver: true }),
+        Animated.timing(pulse, { toValue: 0, duration: 700, useNativeDriver: true }),
+      ]),
+    ).start();
+  }, [pulse]);
+  const scale = pulse.interpolate({ inputRange: [0, 1], outputRange: [1, 2.8] });
+  const opacity = pulse.interpolate({ inputRange: [0, 0.35, 1], outputRange: [0.65, 0.15, 0] });
+  return (
+    <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
+      <Animated.View
+        style={{
+          position: 'absolute',
+          width: size,
+          height: size,
+          borderRadius: size / 2,
+          backgroundColor: color,
+          transform: [{ scale }],
+          opacity,
+        }}
+      />
+      <View
+        style={{
+          width: size,
+          height: size,
+          borderRadius: size / 2,
+          backgroundColor: color,
+          shadowColor: Luxe.amberGlow,
+          shadowOpacity: 0.8,
+          shadowRadius: 4,
+        }}
+      />
+    </View>
+  );
+}
+
+function PrepBar({ progress }: { progress: number }) {
+  const anim = useRef(new Animated.Value(progress)).current;
+  useEffect(() => {
+    Animated.timing(anim, { toValue: progress, duration: 600, useNativeDriver: false }).start();
+  }, [progress, anim]);
+  const width = anim.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['0%', '100%'],
+  });
+  return (
+    <View style={styles.prepBarTrack}>
+      <Animated.View style={[styles.prepBarFill, { width }]}>
+        <LinearGradient
+          colors={['#9A7A3F', '#F4C97E']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
+          style={StyleSheet.absoluteFill}
+        />
+      </Animated.View>
+    </View>
+  );
+}
+
+const FEED_STEPS: { key: OrderStatus; label: string; note: string }[] = [
+  { key: 'pending', label: 'Order received', note: 'Sent to the kitchen' },
+  { key: 'accepted', label: 'Confirmed', note: 'Chef has the ticket' },
+  { key: 'in_progress', label: 'Preparing', note: 'Cooking & plating now' },
+  { key: 'completed', label: 'Delivered', note: 'Enjoy your meal' },
+];
+
+function fmtTime(iso: string | null | undefined): string | null {
+  if (!iso) return null;
+  const d = new Date(iso);
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+}
+
+function StatusFeed({
+  order,
+  activeIdx,
+  isDelivered,
+  now,
+}: {
+  order: Order;
+  activeIdx: number;
+  isDelivered: boolean;
+  now: number;
+}) {
+  const timeFor = (key: OrderStatus): string | null =>
+    fmtTime(order.status_history.find((h) => h.status === key)?.at);
+  void now;
+  return (
+    <View style={styles.feedCard}>
+      <View style={styles.feedHead}>
+        <PulsingDot size={6} />
+        <Text style={styles.feedHeadText}>Live updates</Text>
+      </View>
+      {FEED_STEPS.map((step, i) => {
+        const done = i < activeIdx || (i === activeIdx && isDelivered);
+        const current = i === activeIdx && !isDelivered;
+        const future = i > activeIdx;
+        const time = timeFor(step.key);
+        const isLast = i === FEED_STEPS.length - 1;
+        return (
+          <View key={step.key} style={styles.feedRow}>
+            <View style={styles.feedRail}>
+              <View style={styles.feedDotSlot}>
+                {current ? (
+                  <PulsingDot size={12} />
+                ) : (
+                  <View
+                    style={[
+                      styles.feedDot,
+                      done && styles.feedDotDone,
+                      future && styles.feedDotFuture,
+                    ]}
+                  >
+                    {done && <Ionicons name="checkmark" size={9} color="#1A1206" />}
+                  </View>
+                )}
+              </View>
+              {!isLast && (
+                <View
+                  style={[
+                    styles.feedLine,
+                    (done || current) && styles.feedLineDone,
+                  ]}
+                />
+              )}
+            </View>
+            <View style={styles.feedBody}>
+              <Text
+                style={[
+                  styles.feedLabel,
+                  current && styles.feedLabelCurrent,
+                  future && styles.feedLabelFuture,
+                ]}
+              >
+                {step.label}
+              </Text>
+              <Text style={styles.feedNote}>{current ? `${step.note}…` : step.note}</Text>
+            </View>
+            <Text style={styles.feedTime}>
+              {time ?? (current ? 'now' : future ? '—' : '')}
+            </Text>
+          </View>
+        );
+      })}
     </View>
   );
 }
@@ -381,6 +566,80 @@ const styles = StyleSheet.create({
     fontFamily: LuxeFonts.serifItalic,
     fontSize: 14,
     color: Luxe.ivoryDim,
+  },
+  prepBarTrack: {
+    marginTop: 18,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: 'rgba(255,240,210,0.08)',
+    overflow: 'hidden',
+    maxWidth: 300,
+  },
+  prepBarFill: {
+    height: 4,
+    borderRadius: 2,
+    overflow: 'hidden',
+  },
+
+  // LIVE STATUS FEED
+  feedCard: {
+    marginHorizontal: 22,
+    marginTop: 18,
+    padding: 18,
+    borderRadius: 20,
+    borderWidth: 0.5,
+    borderColor: 'rgba(244,201,126,0.18)',
+    backgroundColor: 'rgba(20,18,15,0.55)',
+  },
+  feedHead: { flexDirection: 'row', alignItems: 'center', gap: 9, marginBottom: 16 },
+  feedHeadText: {
+    fontFamily: LuxeFonts.monoMedium,
+    fontSize: 9.5,
+    color: Luxe.gold,
+    letterSpacing: 2,
+    textTransform: 'uppercase',
+  },
+  feedRow: { flexDirection: 'row', gap: 13 },
+  feedRail: { width: 16, alignItems: 'center' },
+  feedDotSlot: { width: 16, height: 16, alignItems: 'center', justifyContent: 'center' },
+  feedDot: {
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Luxe.surfaceTop,
+    borderWidth: 1,
+    borderColor: Luxe.hairlineStrong,
+  },
+  feedDotDone: { backgroundColor: Luxe.gold, borderColor: Luxe.goldBright },
+  feedDotFuture: { backgroundColor: 'transparent' },
+  feedLine: {
+    flex: 1,
+    width: 1.5,
+    minHeight: 16,
+    backgroundColor: 'rgba(255,240,210,0.22)',
+  },
+  feedLineDone: { backgroundColor: 'rgba(244,201,126,0.45)' },
+  feedBody: { flex: 1, paddingBottom: 18 },
+  feedLabel: {
+    fontFamily: LuxeFonts.sansSemibold,
+    fontSize: 14,
+    color: Luxe.ivory,
+  },
+  feedLabelCurrent: { color: Luxe.amberGlow },
+  feedLabelFuture: { color: Luxe.muted, fontFamily: LuxeFonts.sans },
+  feedNote: {
+    fontFamily: LuxeFonts.sansLight,
+    fontSize: 11.5,
+    color: Luxe.titanium,
+    marginTop: 2,
+  },
+  feedTime: {
+    fontFamily: LuxeFonts.monoMedium,
+    fontSize: 9.5,
+    color: Luxe.muted,
+    letterSpacing: 0.6,
   },
   trackWrap: {
     marginTop: 6,

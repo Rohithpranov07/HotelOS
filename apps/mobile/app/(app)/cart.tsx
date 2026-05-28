@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
+  Animated,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -10,6 +11,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
 import { useOrdersStore, type PaymentMethod } from '../../src/stores/orders.store';
 import { useReservationStore } from '../../src/stores/reservation.store';
@@ -35,22 +37,41 @@ export default function CartScreen() {
   const [error, setError] = useState<string | null>(null);
   const [timing, setTiming] = useState<'asap' | 'schedule'>('asap');
   const [scheduleMinutes, setScheduleMinutes] = useState(30);
+  const [cutlery, setCutlery] = useState(true);
+  const [contactless, setContactless] = useState(false);
   const SCHEDULE_OPTIONS = [30, 60, 90, 120];
 
   const service = Math.round(cartTotal * SERVICE_RATE);
   const total = cartTotal + service;
+  const suite = reservation?.room?.roomNumber ?? '1604';
+  const pointsEarned = Math.floor(total / 100) * 10;
+
+  // Arrival clock — ASAP uses a house standard of ~24 min, scheduled uses the slot.
+  const etaMin = timing === 'asap' ? 24 : scheduleMinutes;
+  const arrival = new Date(Date.now() + etaMin * 60 * 1000);
+  const arrivalLabel = `${String(arrival.getHours()).padStart(2, '0')}:${String(arrival.getMinutes()).padStart(2, '0')}`;
+
+  const composeNotes = (): string | undefined => {
+    const parts = [
+      notes.trim(),
+      cutlery ? 'Please include cutlery & napkins' : 'No cutlery needed',
+      contactless ? 'Leave at the door (contactless)' : null,
+    ].filter(Boolean);
+    return parts.length ? parts.join(' · ') : undefined;
+  };
 
   const onPlace = async () => {
     // Bypass reservation gate for demo — placeOrder falls back to a local fake
     // order anyway when the backend is unavailable.
     const reservationId = reservation?.id ?? 'demo-reservation';
+    void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     try {
       const scheduledFor =
         timing === 'schedule'
           ? new Date(Date.now() + scheduleMinutes * 60 * 1000).toISOString()
           : null;
       const order = await placeOrder(reservationId, payment, {
-        notes: notes || undefined,
+        notes: composeNotes(),
         scheduledFor,
       });
       router.replace({ pathname: '/(app)/order-confirmation', params: { orderId: order.id } });
@@ -85,9 +106,36 @@ export default function CartScreen() {
               </Pressable>
             </View>
           ) : (
+            <>
+            {/* DELIVERY BANNER */}
+            <View style={styles.deliverBanner}>
+              <LinearGradient
+                colors={['rgba(244,201,126,0.14)', 'transparent']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={[StyleSheet.absoluteFill, { borderRadius: 20 }]}
+              />
+              <View style={styles.deliverIcon}>
+                <Ionicons name="bag-handle-outline" size={20} color={Luxe.goldBright} />
+              </View>
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <View style={styles.deliverTopRow}>
+                  <PulsingDot />
+                  <Text style={styles.deliverKicker}>Delivering to suite {suite}</Text>
+                </View>
+                <Text style={styles.deliverTitle}>
+                  Arriving by {arrivalLabel}
+                  <Text style={styles.deliverEta}>  ·  ~{etaMin} min</Text>
+                </Text>
+              </View>
+            </View>
+
             <View style={styles.section}>
               {cart.map((item) => (
                 <View key={item.menuItemId} style={styles.cartRow}>
+                  <View style={styles.cartAvatar}>
+                    <Ionicons name="restaurant-outline" size={18} color={Luxe.gold} />
+                  </View>
                   <View style={{ flex: 1, paddingRight: 14 }}>
                     <Text style={styles.itemName} numberOfLines={2}>
                       {item.name}
@@ -123,7 +171,12 @@ export default function CartScreen() {
                   />
                 </View>
               ))}
+              <Pressable onPress={() => router.back()} style={styles.addMore} hitSlop={6}>
+                <Ionicons name="add" size={15} color={Luxe.goldBright} />
+                <Text style={styles.addMoreLabel}>Add more items</Text>
+              </Pressable>
             </View>
+            </>
           )}
 
           {cart.length > 0 && (
@@ -182,6 +235,25 @@ export default function CartScreen() {
               </View>
 
               <View style={styles.section}>
+                <Text style={styles.sectionLabel}>Preferences</Text>
+                <PrefToggle
+                  icon="restaurant-outline"
+                  label="Cutlery & napkins"
+                  sub="Send a full table setting"
+                  enabled={cutlery}
+                  onToggle={() => setCutlery((v) => !v)}
+                />
+                <View style={styles.prefDivider} />
+                <PrefToggle
+                  icon="walk-outline"
+                  label="Leave at the door"
+                  sub="Contactless — we'll knock and step back"
+                  enabled={contactless}
+                  onToggle={() => setContactless((v) => !v)}
+                />
+              </View>
+
+              <View style={styles.section}>
                 <Text style={styles.sectionLabel}>Charge to</Text>
                 <View style={styles.payRow}>
                   <PayOption
@@ -204,6 +276,15 @@ export default function CartScreen() {
                 <Row label="Service charge · 5%" value={`₹${service.toFixed(0)}`} />
                 <View style={styles.divider} />
                 <Row label="Total" value={`₹${total.toFixed(0)}`} emphasis />
+                {pointsEarned > 0 && (
+                  <View style={styles.pointsRow}>
+                    <Ionicons name="sparkles" size={12} color={Luxe.goldBright} />
+                    <Text style={styles.pointsText}>
+                      You&apos;ll earn{' '}
+                      <Text style={styles.pointsValue}>{pointsEarned} points</Text> on this order
+                    </Text>
+                  </View>
+                )}
               </View>
 
               {error && <Text style={styles.errorText}>{error}</Text>}
@@ -275,6 +356,96 @@ function Row({ label, value, emphasis }: { label: string; value: string; emphasi
   );
 }
 
+function PulsingDot() {
+  const pulse = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulse, { toValue: 1, duration: 1100, useNativeDriver: true }),
+        Animated.timing(pulse, { toValue: 0, duration: 700, useNativeDriver: true }),
+      ]),
+    ).start();
+  }, [pulse]);
+  const scale = pulse.interpolate({ inputRange: [0, 1], outputRange: [1, 2.8] });
+  const opacity = pulse.interpolate({ inputRange: [0, 0.35, 1], outputRange: [0.6, 0.15, 0] });
+  return (
+    <View style={{ width: 7, height: 7, alignItems: 'center', justifyContent: 'center' }}>
+      <Animated.View
+        style={{
+          position: 'absolute',
+          width: 7,
+          height: 7,
+          borderRadius: 3.5,
+          backgroundColor: Luxe.goldBright,
+          transform: [{ scale }],
+          opacity,
+        }}
+      />
+      <View
+        style={{
+          width: 7,
+          height: 7,
+          borderRadius: 3.5,
+          backgroundColor: Luxe.goldBright,
+          shadowColor: Luxe.amberGlow,
+          shadowOpacity: 0.8,
+          shadowRadius: 4,
+        }}
+      />
+    </View>
+  );
+}
+
+function PrefToggle({
+  icon,
+  label,
+  sub,
+  enabled,
+  onToggle,
+}: {
+  icon: keyof typeof Ionicons.glyphMap;
+  label: string;
+  sub: string;
+  enabled: boolean;
+  onToggle: () => void;
+}) {
+  const anim = useRef(new Animated.Value(enabled ? 1 : 0)).current;
+  useEffect(() => {
+    Animated.timing(anim, {
+      toValue: enabled ? 1 : 0,
+      duration: 200,
+      useNativeDriver: false,
+    }).start();
+  }, [enabled, anim]);
+  const knobX = anim.interpolate({ inputRange: [0, 1], outputRange: [3, 25] });
+  const trackColor = anim.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['rgba(255,240,210,0.10)', 'rgba(244,201,126,0.55)'],
+  });
+  return (
+    <Pressable
+      onPress={() => {
+        void Haptics.selectionAsync();
+        onToggle();
+      }}
+      style={styles.prefRow}
+      accessibilityRole="switch"
+      accessibilityState={{ checked: enabled }}
+    >
+      <View style={styles.prefIcon}>
+        <Ionicons name={icon} size={17} color={enabled ? Luxe.goldBright : Luxe.titanium} />
+      </View>
+      <View style={{ flex: 1, minWidth: 0 }}>
+        <Text style={styles.prefLabel}>{label}</Text>
+        <Text style={styles.prefSub}>{sub}</Text>
+      </View>
+      <Animated.View style={[styles.prefTrack, { backgroundColor: trackColor }]}>
+        <Animated.View style={[styles.prefKnob, { transform: [{ translateX: knobX }] }]} />
+      </Animated.View>
+    </Pressable>
+  );
+}
+
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: Luxe.obsidian },
   header: {
@@ -324,11 +495,134 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     marginBottom: 14,
   },
+  // DELIVERY BANNER
+  deliverBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    marginHorizontal: 22,
+    marginBottom: 4,
+    padding: 16,
+    borderRadius: 20,
+    overflow: 'hidden',
+    borderWidth: 0.5,
+    borderColor: 'rgba(244,201,126,0.22)',
+    backgroundColor: 'rgba(21,19,15,0.6)',
+  },
+  deliverIcon: {
+    width: 46,
+    height: 46,
+    borderRadius: 15,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(244,201,126,0.08)',
+    borderWidth: 0.5,
+    borderColor: 'rgba(244,201,126,0.22)',
+  },
+  deliverTopRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 },
+  deliverKicker: {
+    fontFamily: LuxeFonts.monoMedium,
+    fontSize: 9,
+    color: Luxe.gold,
+    letterSpacing: 1.6,
+    textTransform: 'uppercase',
+  },
+  deliverTitle: {
+    fontFamily: LuxeFonts.serif,
+    fontSize: 19,
+    color: Luxe.ivory,
+    letterSpacing: -0.3,
+  },
+  deliverEta: { fontFamily: LuxeFonts.monoMedium, fontSize: 11, color: Luxe.titanium },
+
   cartRow: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: 14,
+    gap: 14,
   },
+  cartAvatar: {
+    width: 46,
+    height: 46,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(244,201,126,0.06)',
+    borderWidth: 0.5,
+    borderColor: Luxe.hairlineStrong,
+  },
+  addMore: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
+    paddingVertical: 14,
+    marginTop: 4,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: Luxe.hairline,
+  },
+  addMoreLabel: {
+    fontFamily: LuxeFonts.monoMedium,
+    fontSize: 10.5,
+    color: Luxe.goldBright,
+    letterSpacing: 1.4,
+    textTransform: 'uppercase',
+  },
+
+  // PREFERENCES
+  prefRow: { flexDirection: 'row', alignItems: 'center', gap: 14 },
+  prefIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 13,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(244,201,126,0.06)',
+    borderWidth: 0.5,
+    borderColor: Luxe.hairlineStrong,
+  },
+  prefLabel: { fontFamily: LuxeFonts.sansSemibold, fontSize: 14, color: Luxe.ivory },
+  prefSub: {
+    fontFamily: LuxeFonts.sansLight,
+    fontSize: 11.5,
+    color: Luxe.titanium,
+    marginTop: 2,
+  },
+  prefDivider: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: Luxe.hairline,
+    marginVertical: 16,
+  },
+  prefTrack: {
+    width: 50,
+    height: 30,
+    borderRadius: 15,
+    justifyContent: 'center',
+    borderWidth: 0.5,
+    borderColor: 'rgba(255,240,210,0.12)',
+  },
+  prefKnob: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: Luxe.ivory,
+    shadowColor: '#000',
+    shadowOpacity: 0.3,
+    shadowRadius: 3,
+    shadowOffset: { width: 0, height: 1 },
+  },
+
+  // POINTS
+  pointsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 16,
+    paddingTop: 14,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: Luxe.hairline,
+  },
+  pointsText: { fontFamily: LuxeFonts.sansLight, fontSize: 12.5, color: Luxe.ivoryDim },
+  pointsValue: { fontFamily: LuxeFonts.sansSemibold, color: Luxe.goldBright },
   itemName: {
     fontFamily: LuxeFonts.serif,
     fontSize: 18,

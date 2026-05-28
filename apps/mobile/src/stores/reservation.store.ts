@@ -68,6 +68,7 @@ interface ReservationState {
   fetchActiveReservation: (opts?: { force?: boolean }) => Promise<void>;
   fetchFolio: (reservationId: string) => Promise<void>;
   updateDnd: (enabled: boolean) => Promise<void>;
+  markSettled: () => void;
   reset: () => void;
 }
 
@@ -117,15 +118,30 @@ export const useReservationStore = create<ReservationState>((set, get) => ({
   updateDnd: async (enabled) => {
     const res = get().reservation;
     if (!res) return;
-    // Optimistic update
+    // Local-first: keep the optimistic update even if the backend is unreachable
+    // (demo / offline), so the toggle stays responsive. We don't roll back.
     set({ reservation: { ...res, isDnd: enabled } });
     try {
       await bookingApi.patch(`/reservations/${res.id}/dnd`, { enabled });
-    } catch (err) {
-      // Roll back
+    } catch {
+      // Backend not reachable — the optimistic state stands.
+    }
+  },
+
+  markSettled: () => {
+    const { reservation, folio } = get();
+    if (reservation) {
       set({
-        reservation: { ...res, isDnd: !enabled },
-        error: err instanceof Error ? err.message : 'Failed to update DND',
+        reservation: {
+          ...reservation,
+          paidAmount: reservation.totalAmount,
+          balanceDue: 0,
+        },
+      });
+    }
+    if (folio) {
+      set({
+        folio: { ...folio, paid_amount: folio.total_amount, balance_due: 0 },
       });
     }
   },

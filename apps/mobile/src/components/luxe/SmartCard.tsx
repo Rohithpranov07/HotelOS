@@ -27,7 +27,8 @@ export function SmartCard({
       : glow === 'ink'
         ? 'rgba(168,162,154,0.10)'
         : 'rgba(139,111,71,0.18)';
-  return (
+
+  const inner = (
     <LinearGradient
       colors={[Luxe.surfaceTop, '#0C0A08']}
       start={{ x: 0, y: 0 }}
@@ -47,18 +48,28 @@ export function SmartCard({
           <Text style={styles.kicker}>{kicker}</Text>
         </View>
         {action ? (
-          <Pressable onPress={onPress} style={styles.actionPill}>
+          <View style={styles.actionPill}>
             <Text style={styles.actionText}>{action}</Text>
-          </Pressable>
+          </View>
         ) : null}
       </View>
       <Text style={styles.title}>{title}</Text>
       {body ? <Text style={styles.body}>{body}</Text> : null}
     </LinearGradient>
   );
+
+  if (onPress) {
+    return (
+      <Pressable onPress={onPress} style={styles.pressWrap}>
+        {inner}
+      </Pressable>
+    );
+  }
+  return inner;
 }
 
 const styles = StyleSheet.create({
+  pressWrap: { borderRadius: 24 },
   card: {
     borderRadius: 24,
     padding: 22,

@@ -1,11 +1,9 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect } from 'react';
 import {
-  Modal,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -29,18 +27,15 @@ const STEPS: { key: OrderStatus; label: string }[] = [
   { key: 'completed', label: 'Delivered' },
 ];
 
-const RATE_DELAY_MS = 2 * 60 * 1000;
-
 export default function ActiveOrdersScreen() {
   void useLuxeFonts();
   const router = useRouter();
   const orders = useOrdersStore((s) => s.activeOrders);
   const history = useOrdersStore((s) => s.orderHistory);
   const fetch = useOrdersStore((s) => s.fetchActiveOrders);
-  const rateOrder = useOrdersStore((s) => s.rateOrder);
+  const enqueueFeedback = useOrdersStore((s) => s.enqueueFeedback);
   const reorder = useOrdersStore((s) => s.reorder);
   const reservation = useReservationStore((s) => s.reservation);
-  const [rateTarget, setRateTarget] = useState<Order | null>(null);
 
   useFocusEffect(
     useCallback(() => {
@@ -54,15 +49,6 @@ export default function ActiveOrdersScreen() {
     }
     return () => disconnectSocket();
   }, [reservation?.id]);
-
-  useEffect(() => {
-    const justCompleted = history[0];
-    if (!justCompleted || justCompleted.guest_rating || justCompleted.status !== 'completed') return;
-    const completedAt = justCompleted.completed_at ? new Date(justCompleted.completed_at).getTime() : Date.now();
-    const wait = Math.max(0, completedAt + RATE_DELAY_MS - Date.now());
-    const t = setTimeout(() => setRateTarget(justCompleted), wait);
-    return () => clearTimeout(t);
-  }, [history]);
 
   return (
     <View style={styles.root}>
@@ -116,12 +102,12 @@ export default function ActiveOrdersScreen() {
                       <Ionicons name="refresh" size={11} color={Luxe.ivory} />
                       <Text style={styles.reorderLabel}>REORDER</Text>
                     </Pressable>
-                    {!o.guest_rating ? (
-                      <Pressable onPress={() => setRateTarget(o)} style={styles.rateBtn}>
+                    {!o.guest_mood && !o.guest_rating ? (
+                      <Pressable onPress={() => enqueueFeedback(o)} style={styles.rateBtn}>
                         <Text style={styles.rateBtnLabel}>RATE</Text>
                       </Pressable>
                     ) : (
-                      <Text style={styles.rated}>★ {o.guest_rating}</Text>
+                      <Text style={styles.rated}>★ {o.guest_mood ?? o.guest_rating}</Text>
                     )}
                   </View>
                 </View>
@@ -135,16 +121,6 @@ export default function ActiveOrdersScreen() {
           locations={[0, 0.45, 0.8]}
           pointerEvents="none"
           style={styles.bottomFade}
-        />
-
-        <RatingSheet
-          order={rateTarget}
-          onClose={() => setRateTarget(null)}
-          onSubmit={async (rating, feedback) => {
-            if (!rateTarget) return;
-            await rateOrder(rateTarget.id, rating, feedback);
-            setRateTarget(null);
-          }}
         />
       </SafeAreaView>
     </View>
@@ -232,70 +208,6 @@ function OrderCard({ order }: { order: Order }) {
         ) : null}
       </View>
     </LinearGradient>
-  );
-}
-
-function RatingSheet({
-  order,
-  onClose,
-  onSubmit,
-}: {
-  order: Order | null;
-  onClose: () => void;
-  onSubmit: (rating: number, feedback?: string) => Promise<void>;
-}) {
-  const [rating, setRating] = useState(0);
-  const [feedback, setFeedback] = useState('');
-  useEffect(() => {
-    if (!order) {
-      setRating(0);
-      setFeedback('');
-    }
-  }, [order]);
-  return (
-    <Modal visible={!!order} transparent animationType="slide" onRequestClose={onClose}>
-      <Pressable style={sheetStyles.backdrop} onPress={onClose} />
-      <View style={sheetStyles.sheet}>
-        <View style={sheetStyles.handle} />
-        <Text style={sheetStyles.kicker}>How was it?</Text>
-        <Text style={sheetStyles.title}>
-          {order?.items[0]?.name ?? 'Your order'}
-        </Text>
-        <View style={sheetStyles.starsRow}>
-          {[1, 2, 3, 4, 5].map((n) => (
-            <Pressable key={n} onPress={() => setRating(n)} hitSlop={6}>
-              <Ionicons
-                name={n <= rating ? 'star' : 'star-outline'}
-                size={32}
-                color={n <= rating ? Luxe.amberGlow : Luxe.titanium}
-                style={{ marginHorizontal: 4 }}
-              />
-            </Pressable>
-          ))}
-        </View>
-        <TextInput
-          value={feedback}
-          onChangeText={setFeedback}
-          placeholder="A word for the kitchen (optional)"
-          placeholderTextColor={Luxe.muted}
-          style={sheetStyles.input}
-          multiline
-        />
-        <Pressable
-          disabled={rating === 0}
-          onPress={() => onSubmit(rating, feedback || undefined)}
-          style={[sheetStyles.submit, rating === 0 && { opacity: 0.5 }]}
-        >
-          <LinearGradient
-            colors={['#E8B466', '#9A7A3F']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={StyleSheet.absoluteFill}
-          />
-          <Text style={sheetStyles.submitLabel}>SUBMIT</Text>
-        </Pressable>
-      </View>
-    </Modal>
   );
 }
 
@@ -402,75 +314,6 @@ const cardStyles = StyleSheet.create({
     fontSize: 9.5,
     color: Luxe.titanium,
     letterSpacing: 1.4,
-  },
-});
-
-const sheetStyles = StyleSheet.create({
-  backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)' },
-  sheet: {
-    backgroundColor: Luxe.graphite,
-    paddingHorizontal: 28,
-    paddingBottom: 40,
-    paddingTop: 14,
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
-    borderTopWidth: 0.5,
-    borderColor: Luxe.hairlineStrong,
-  },
-  handle: {
-    width: 40,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: Luxe.muted,
-    alignSelf: 'center',
-    marginBottom: 18,
-  },
-  kicker: {
-    fontFamily: LuxeFonts.monoMedium,
-    fontSize: 10,
-    color: Luxe.gold,
-    letterSpacing: 2,
-    textTransform: 'uppercase',
-  },
-  title: {
-    fontFamily: LuxeFonts.serif,
-    fontSize: 26,
-    color: Luxe.ivory,
-    letterSpacing: -0.5,
-    marginTop: 8,
-  },
-  starsRow: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    marginTop: 24,
-  },
-  input: {
-    fontFamily: LuxeFonts.sans,
-    color: Luxe.ivory,
-    fontSize: 13,
-    padding: 14,
-    minHeight: 64,
-    borderRadius: 14,
-    borderWidth: 0.5,
-    borderColor: Luxe.hairlineStrong,
-    backgroundColor: 'rgba(8,7,10,0.5)',
-    marginTop: 22,
-    textAlignVertical: 'top',
-  },
-  submit: {
-    height: 54,
-    borderRadius: 27,
-    marginTop: 22,
-    alignItems: 'center',
-    justifyContent: 'center',
-    overflow: 'hidden',
-  },
-  submitLabel: {
-    fontFamily: LuxeFonts.monoMedium,
-    fontSize: 11.5,
-    color: '#16140F',
-    letterSpacing: 2.4,
-    fontWeight: '600',
   },
 });
 

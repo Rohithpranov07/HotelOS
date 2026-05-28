@@ -5,71 +5,40 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { Hero } from '../../src/components/luxe/Hero';
 import { MobileKeyCard } from '../../src/components/luxe/MobileKeyCard';
-import { StayTimeline, type TimelineItem } from '../../src/components/luxe/StayTimeline';
+import { StayTimeline } from '../../src/components/luxe/StayTimeline';
 import { LuxeActionGrid, type LuxeAction } from '../../src/components/luxe/LuxeActionGrid';
 import { SmartCard } from '../../src/components/luxe/SmartCard';
-import { DiscoveryRail, type DiscoveryItem } from '../../src/components/luxe/DiscoveryRail';
+import { DiscoveryRail } from '../../src/components/luxe/DiscoveryRail';
 import { LuxeLoyaltyCard } from '../../src/components/luxe/LuxeLoyaltyCard';
+import { RoomPreferences } from '../../src/components/luxe/RoomPreferences';
 import { SectionHeader } from '../../src/components/luxe/SectionHeader';
 import { Luxe, LuxeFonts } from '../../src/theme/luxe';
 import { useLuxeFonts } from '../../src/lib/useLuxeFonts';
 import { useAuthStore } from '../../src/stores/auth.store';
 import { useReservationStore, type Reservation } from '../../src/stores/reservation.store';
+import { useOrdersStore, type Order } from '../../src/stores/orders.store';
+import { buildDiscoveryItems } from '../../src/lib/discoveryItems';
 import { hasShownCheckoutModal } from './checkout-complete';
 
 const POLL_MS = 5 * 60 * 1000;
 
-const DISCOVERY_BASE: DiscoveryItem[] = [
-  {
-    kicker: 'Tonight',
-    title: 'Chef Aoyama\nat Kusa, 8:15',
-    meta: 'Reserved',
-    byline: 'A 7-course tasting in the cedar room',
-    tone: 'amber',
-  },
-  {
-    kicker: 'Cellar',
-    title: 'A pour from\nthe private list',
-    meta: '6 vintages',
-    byline: 'Curated by sommelier Hiroshi Tanaka',
-    tone: 'bronze',
-  },
-  {
-    kicker: 'Spa',
-    title: 'Onsen ritual\nat moonrise',
-    meta: '21:00 slot',
-    byline: 'Steam, cypress and stillness',
-    tone: 'ink',
-  },
-  {
-    kicker: 'Kyoto',
-    title: 'Lantern walk\nthrough Gion',
-    meta: '12 min',
-    byline: 'After dinner — concierge will accompany',
-    tone: 'ivory',
-  },
-];
 
-const TIMELINE: TimelineItem[] = [
-  { time: '17:30', label: 'Turndown', done: true },
-  { time: '20:15', label: 'Dinner · Kusa', active: true },
-  { time: '21:30', label: 'Onsen ritual' },
-  { time: '23:00', label: 'Nightcap' },
-];
 
 export default function HomeScreen() {
   const fontsLoaded = useLuxeFonts();
   const guest = useAuthStore((s) => s.guest);
   const reservation = useReservationStore((s) => s.reservation);
   const fetchActiveReservation = useReservationStore((s) => s.fetchActiveReservation);
-  const updateDnd = useReservationStore((s) => s.updateDnd);
+  const activeOrders = useOrdersStore((s) => s.activeOrders);
+  const fetchActiveOrders = useOrdersStore((s) => s.fetchActiveOrders);
   const router = useRouter();
   const [unlocked, setUnlocked] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
       fetchActiveReservation();
-    }, [fetchActiveReservation]),
+      fetchActiveOrders();
+    }, [fetchActiveReservation, fetchActiveOrders]),
   );
 
   useEffect(() => {
@@ -107,13 +76,6 @@ export default function HomeScreen() {
 
   const actions: LuxeAction[] = [
     {
-      kind: 'room-service',
-      label: 'Room Service',
-      sub: 'In-suite · 24h',
-      badge: 'Open',
-      onPress: () => router.push('/(app)/services'),
-    },
-    {
       kind: 'concierge',
       label: 'Concierge AI',
       sub: 'Always listening',
@@ -124,7 +86,7 @@ export default function HomeScreen() {
       kind: 'housekeeping',
       label: 'Housekeeping',
       sub: reservation?.isDnd ? 'Do not disturb' : 'Turn down · Linen',
-      onPress: () => updateDnd(!(reservation?.isDnd ?? false)),
+      onPress: () => router.push('/(app)/housekeeping'),
     },
     {
       kind: 'payments',
@@ -133,8 +95,6 @@ export default function HomeScreen() {
       onPress: () => router.push('/(app)/folio'),
     },
   ];
-
-  void reservation;
 
   return (
     <View style={styles.root}>
@@ -180,40 +140,43 @@ export default function HomeScreen() {
 
           {/* STAY TIMELINE */}
           <View style={{ marginTop: 56 }}>
-            <StayTimeline items={TIMELINE} dayLabel={dayLabel(reservation) || 'Day 2 of 4'} />
+            <StayTimeline
+              items={buildTimelineItems(reservation, activeOrders)}
+              dayLabel={dayLabel(reservation) || 'Day 2 of 4'}
+            />
           </View>
 
           {/* QUICK ACTIONS */}
           <View style={{ marginTop: 60 }}>
-            <SectionHeader kicker="In reach" title="At a touch" right="04" />
+            <SectionHeader kicker="In reach" title="At a touch" right="03" />
             <LuxeActionGrid items={actions} />
+          </View>
+
+          {/* ROOM PREFERENCES */}
+          <View style={{ marginTop: 60 }}>
+            <SectionHeader kicker="Your suite" title="Room preferences" right="Saved" />
+            <RoomPreferences />
           </View>
 
           {/* SMART CONTEXT */}
           <View style={{ marginTop: 60 }}>
             <SectionHeader kicker="Right now" title="Quiet intelligence" right="Live" />
             <View style={styles.smartStack}>
-              <SmartCard
-                kicker="In 12 minutes"
-                title="Wagyu is plated and on its way to your suite."
-                body="Hot sake follows a moment behind. Lighting dimmed to 14%."
-                action="Track"
-                live
-              />
-              <SmartCard
-                kicker="Pool · West"
-                title="Quiet now — two guests, water at 28°."
-                body="Open until 23:00. Cabana 6 reserved under your name."
-                action="Reserve"
-                glow="ink"
-              />
+              {buildSmartCards({ reservation, activeOrders, router }).map((card, i) => (
+                <SmartCard key={i} {...card} />
+              ))}
             </View>
           </View>
 
           {/* DISCOVERY */}
           <View style={{ marginTop: 64 }}>
-            <SectionHeader kicker="The edit" title="Curated for tonight" right="See all" />
-            <DiscoveryRail items={DISCOVERY_BASE} />
+            <SectionHeader
+              kicker="The edit"
+              title="Curated for tonight"
+              right="See all"
+              onRightPress={() => router.push('/(app)/discover')}
+            />
+            <DiscoveryRail items={buildDiscoveryItems(router).slice(0, 4)} />
           </View>
 
           {/* LOYALTY */}
@@ -245,6 +208,237 @@ export default function HomeScreen() {
       </SafeAreaView>
     </View>
   );
+}
+
+/* ─── Stay Timeline builder ─── */
+
+interface TimelineSlot { time: string; label: string; min: number }
+
+function buildTimelineItems(
+  reservation: Reservation | null,
+  activeOrders: Order[],
+): { time: string; label: string; done?: boolean; active?: boolean }[] {
+  const now = new Date();
+  const currentMin = now.getHours() * 60 + now.getMinutes();
+
+  const pool: TimelineSlot[] = [
+    { time: '07:30', label: 'Breakfast', min: 450 },
+    { time: '12:30', label: 'Lunch menu', min: 750 },
+    { time: '17:30', label: 'Turndown', min: 1050 },
+    { time: '19:30', label: 'Dinner', min: 1170 },
+    { time: '21:00', label: 'Spa ritual', min: 1260 },
+    { time: '23:00', label: 'Nightcap', min: 1380 },
+  ];
+
+  // Checkout appears only on the last day
+  if (isLastDay(reservation)) {
+    pool.push({ time: '11:00', label: 'Checkout', min: 660 });
+  }
+
+  // Inject the earliest live order's ETA
+  const liveOrder = activeOrders.find(
+    (o) => o.status === 'pending' || o.status === 'accepted' || o.status === 'in_progress',
+  );
+  if (liveOrder?.sla_deadline) {
+    const eta = new Date(liveOrder.sla_deadline);
+    const min = eta.getHours() * 60 + eta.getMinutes();
+    if (min > currentMin) {
+      const label = liveOrder.items[0]?.name ?? 'Order arriving';
+      pool.push({
+        time: `${String(eta.getHours()).padStart(2, '0')}:${String(eta.getMinutes()).padStart(2, '0')}`,
+        label: label.length > 14 ? label.slice(0, 13) + '…' : label,
+        min,
+      });
+    }
+  }
+
+  pool.sort((a, b) => a.min - b.min);
+
+  // Window: last completed event + next 3, or 4 upcoming if nothing is past yet
+  const past = pool.filter((s) => s.min < currentMin);
+  const future = pool.filter((s) => s.min >= currentMin);
+  const window = past.length > 0
+    ? [...past.slice(-1), ...future.slice(0, 3)]
+    : future.slice(0, 4);
+
+  const nextMin = future[0]?.min ?? -1;
+
+  return window.slice(0, 4).map((slot) => ({
+    time: slot.time,
+    label: slot.label,
+    done: slot.min < currentMin,
+    active: slot.min === nextMin,
+  }));
+}
+
+function isLastDay(r: Reservation | null): boolean {
+  if (!r) return false;
+  const co = new Date(r.checkOutDate);
+  const today = new Date();
+  return (
+    co.getFullYear() === today.getFullYear() &&
+    co.getMonth() === today.getMonth() &&
+    co.getDate() === today.getDate()
+  );
+}
+
+/* ─── Quiet Intelligence card builder ─── */
+
+interface SmartCardData {
+  kicker: string;
+  title: string;
+  body?: string;
+  action?: string;
+  glow?: 'gold' | 'ink' | 'bronze';
+  live?: boolean;
+  onPress?: () => void;
+}
+
+function etaLabel(order: Order): string {
+  if (order.sla_deadline) {
+    const mins = Math.max(0, Math.round((new Date(order.sla_deadline).getTime() - Date.now()) / 60_000));
+    if (mins <= 0) return 'Arriving now';
+    return `In ${mins} min`;
+  }
+  if (order.estimated_delivery_minutes) return `In ${order.estimated_delivery_minutes} min`;
+  return 'On its way';
+}
+
+function orderStatusLabel(status: Order['status']): string {
+  if (status === 'pending') return 'Acknowledged — being prepared.';
+  if (status === 'accepted') return 'Accepted — kitchen is on it.';
+  if (status === 'in_progress') return 'Being prepared and plated now.';
+  return 'On its way.';
+}
+
+function orderTitle(order: Order): string {
+  const names = order.items.slice(0, 2).map((i) => i.name);
+  const suffix = order.items.length > 2 ? ` +${order.items.length - 2} more` : '';
+  return names.join(', ') + suffix;
+}
+
+function atmosphereCard(router: ReturnType<typeof useRouter>): SmartCardData {
+  const h = new Date().getHours();
+  if (h >= 6 && h < 11) {
+    return {
+      kicker: 'This morning',
+      title: 'The city wakes quietly below.',
+      body: 'Breakfast can be arranged in-suite — pastries, fruit, and your preferred brew.',
+      action: 'Order',
+      glow: 'gold',
+      onPress: () => router.push('/(app)/services'),
+    };
+  }
+  if (h >= 11 && h < 17) {
+    return {
+      kicker: 'This afternoon',
+      title: 'The pool is unhurried right now.',
+      body: 'A quiet swim, a cold towel, and the afternoon is yours. The spa has open slots too.',
+      action: 'Arrange',
+      glow: 'ink',
+      onPress: () => router.push('/(app)/concierge'),
+    };
+  }
+  if (h >= 17 && h < 22) {
+    return {
+      kicker: 'This evening',
+      title: 'The kitchen is open.',
+      body: "Chef's tasting menu, a bottle from the cellar, or just what you're craving.",
+      action: 'Order',
+      glow: 'gold',
+      onPress: () => router.push('/(app)/services'),
+    };
+  }
+  return {
+    kicker: 'Late night',
+    title: 'The hotel is still.',
+    body: 'A nightcap, a late-night snack, or simply silence — the concierge is always here.',
+    action: 'Ask',
+    glow: 'ink',
+    onPress: () => router.push('/(app)/concierge'),
+  };
+}
+
+function buildSmartCards({
+  reservation,
+  activeOrders,
+  router,
+}: {
+  reservation: Reservation | null;
+  activeOrders: Order[];
+  router: ReturnType<typeof useRouter>;
+}): SmartCardData[] {
+  const cards: SmartCardData[] = [];
+
+  // 1. Live order tracking
+  const liveOrder = activeOrders.find((o) =>
+    (o.status === 'pending' || o.status === 'accepted' || o.status === 'in_progress'),
+  );
+  if (liveOrder) {
+    cards.push({
+      kicker: etaLabel(liveOrder),
+      title: orderTitle(liveOrder),
+      body: `${orderStatusLabel(liveOrder.status)}${liveOrder.assigned_staff ? ` ${liveOrder.assigned_staff.fullName} is handling your order.` : ''}`,
+      action: 'Track',
+      glow: 'gold',
+      live: true,
+      onPress: () => router.push('/(app)/orders'),
+    });
+  }
+
+  // 2. Outstanding balance
+  if (reservation && reservation.balanceDue > 0) {
+    cards.push({
+      kicker: 'Folio',
+      title: `${formatBalance(reservation.balanceDue)} remaining on your stay.`,
+      body: 'Settle at any time — card, UPI, or loyalty points all accepted.',
+      action: 'View',
+      glow: 'bronze',
+      onPress: () => router.push('/(app)/folio'),
+    });
+  }
+
+  // 3. Do Not Disturb active
+  if (reservation?.isDnd) {
+    cards.push({
+      kicker: 'Suite',
+      title: 'Do Not Disturb is on.',
+      body: 'Housekeeping will hold. Tap to change your preference.',
+      action: 'Manage',
+      glow: 'ink',
+      onPress: () => router.push('/(app)/housekeeping'),
+    });
+  }
+
+  // 4. Pre-arrival check-in nudge
+  if (reservation?.status === 'confirmed' || reservation?.status === 'pre_checked_in') {
+    cards.push({
+      kicker: 'Before arrival',
+      title: 'Skip the front desk entirely.',
+      body: 'Complete digital check-in and walk straight to your suite — your key will be waiting.',
+      action: 'Begin',
+      glow: 'gold',
+      onPress: () => router.push('/(app)/checkin'),
+    });
+  }
+
+  // Fall back to atmosphere cards so the section is never empty
+  if (cards.length === 0) {
+    cards.push(atmosphereCard(router));
+    cards.push({
+      kicker: 'Always on',
+      title: 'Your concierge is listening.',
+      body: 'Anything you need — ordered, arranged, or simply answered.',
+      action: 'Chat',
+      glow: 'bronze',
+      onPress: () => router.push('/(app)/concierge'),
+    });
+  } else if (cards.length === 1) {
+    // Keep at least 2 cards for visual balance
+    cards.push(atmosphereCard(router));
+  }
+
+  return cards.slice(0, 3);
 }
 
 function greetingFor(r: Reservation | null): { greeting: string; subhead: string } {
@@ -354,7 +548,7 @@ function loyaltyProgress(points: number): number {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: Luxe.obsidian },
-  mobileKeyWrap: { paddingHorizontal: 22, marginTop: -36, position: 'relative', zIndex: 4 },
+  mobileKeyWrap: { paddingHorizontal: 22, marginTop: 12, position: 'relative', zIndex: 4 },
   checkinPrompt: {
     marginTop: 14,
     padding: 14,

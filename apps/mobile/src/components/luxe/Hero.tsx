@@ -54,8 +54,6 @@ export function Hero({
           end={{ x: 0.5, y: 0.4 }}
           style={StyleSheet.absoluteFill}
         />
-        {/* horizon line */}
-        <View style={styles.horizon} />
         {/* bottom fade to body */}
         <LinearGradient
           colors={['transparent', Luxe.obsidian]}
@@ -120,16 +118,9 @@ function formatTime(): string {
 }
 
 const styles = StyleSheet.create({
-  root: { height: 660, overflow: 'hidden' },
-  horizon: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    top: '54%',
-    height: 1,
-    backgroundColor: 'rgba(232,180,102,0.22)',
-  },
-  bottomFade: { position: 'absolute', left: 0, right: 0, bottom: 0, height: 200 },
+  root: { height: 460, overflow: 'hidden' },
+
+  bottomFade: { position: 'absolute', left: 0, right: 0, bottom: 0, height: 140 },
   topMeta: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -157,7 +148,7 @@ const styles = StyleSheet.create({
     letterSpacing: 1.6,
     color: Luxe.ivoryDim,
   },
-  headlineBlock: { paddingHorizontal: 28, paddingTop: 90 },
+  headlineBlock: { paddingHorizontal: 28, paddingTop: 52 },
   greeting: {
     fontFamily: LuxeFonts.serif,
     fontSize: 36,
@@ -179,10 +170,10 @@ const styles = StyleSheet.create({
     color: Luxe.ivoryDim,
     lineHeight: 23,
     maxWidth: 290,
-    marginTop: 26,
+    marginTop: 18,
     letterSpacing: -0.1,
   },
-  statusRow: { position: 'absolute', left: 0, right: 0, bottom: 110, paddingHorizontal: 28 },
+  statusRow: { position: 'absolute', left: 0, right: 0, bottom: 16, paddingHorizontal: 28 },
   divider: { height: 1, marginBottom: 22 },
   statusInner: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end' },
   kicker: {

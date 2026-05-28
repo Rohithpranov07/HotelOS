@@ -11,6 +11,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { useAuthStore } from '../../src/stores/auth.store';
+import { ServiceFeedbackHost } from '../../src/components/luxe/ServiceFeedbackHost';
 import { Luxe, LuxeFonts } from '../../src/theme/luxe';
 
 type DockKind = 'home' | 'services' | 'key' | 'concierge' | 'account';
@@ -32,6 +33,10 @@ const LABELS: Record<DockKind, string> = {
 };
 
 const HIDDEN_ON: ReadonlySet<string> = new Set([
+  'housekeeping',
+  'dining',
+  'other-services',
+  'complaints',
   'cart',
   'orders',
   'order-confirmation',
@@ -40,6 +45,7 @@ const HIDDEN_ON: ReadonlySet<string> = new Set([
   'loyalty',
   'feedback',
   'checkout-complete',
+  'discover',
 ]);
 
 function FloatingDock({ state, navigation }: BottomTabBarProps) {
@@ -120,28 +126,37 @@ export default function AppLayout() {
   if (staffUser) return <Redirect href="/(staff)/tasks" />;
 
   return (
-    <Tabs
-      screenOptions={{
-        headerShown: false,
-        sceneStyle: { backgroundColor: Luxe.obsidian },
-      }}
-      tabBar={(props) => <FloatingDock {...props} />}
-    >
-      <Tabs.Screen name="home" />
-      <Tabs.Screen name="services" />
-      <Tabs.Screen name="key" />
-      <Tabs.Screen name="concierge" />
-      <Tabs.Screen name="account" />
-      <Tabs.Screen name="reservation" options={{ href: null }} />
-      <Tabs.Screen name="folio" options={{ href: null }} />
-      <Tabs.Screen name="cart" options={{ href: null }} />
-      <Tabs.Screen name="orders" options={{ href: null }} />
-      <Tabs.Screen name="order-confirmation" options={{ href: null }} />
-      <Tabs.Screen name="checkin" options={{ href: null }} />
-      <Tabs.Screen name="loyalty" options={{ href: null }} />
-      <Tabs.Screen name="feedback" options={{ href: null }} />
-      <Tabs.Screen name="checkout-complete" options={{ href: null }} />
-    </Tabs>
+    <>
+      <Tabs
+        backBehavior="history"
+        screenOptions={{
+          headerShown: false,
+          sceneStyle: { backgroundColor: Luxe.obsidian },
+        }}
+        tabBar={(props) => <FloatingDock {...props} />}
+      >
+        <Tabs.Screen name="home" />
+        <Tabs.Screen name="services" />
+        <Tabs.Screen name="key" />
+        <Tabs.Screen name="concierge" />
+        <Tabs.Screen name="account" />
+        <Tabs.Screen name="housekeeping" options={{ href: null }} />
+        <Tabs.Screen name="dining" options={{ href: null }} />
+        <Tabs.Screen name="other-services" options={{ href: null }} />
+        <Tabs.Screen name="complaints" options={{ href: null }} />
+        <Tabs.Screen name="reservation" options={{ href: null }} />
+        <Tabs.Screen name="folio" options={{ href: null }} />
+        <Tabs.Screen name="cart" options={{ href: null }} />
+        <Tabs.Screen name="orders" options={{ href: null }} />
+        <Tabs.Screen name="order-confirmation" options={{ href: null }} />
+        <Tabs.Screen name="checkin" options={{ href: null }} />
+        <Tabs.Screen name="loyalty" options={{ href: null }} />
+        <Tabs.Screen name="feedback" options={{ href: null }} />
+        <Tabs.Screen name="checkout-complete" options={{ href: null }} />
+        <Tabs.Screen name="discover" options={{ href: null }} />
+      </Tabs>
+      <ServiceFeedbackHost />
+    </>
   );
 }
 

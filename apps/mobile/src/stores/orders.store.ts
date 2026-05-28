@@ -60,6 +60,9 @@ export interface Order {
   accepted_at: string | null;
   completed_at: string | null;
   guest_rating: number | null;
+  guest_mood: number | null;
+  guest_sentiment: ServiceSentiment | null;
+  guest_feedback_tags?: string[];
   guest_feedback: string | null;
   notes: string | null;
   created_at: string;
@@ -68,12 +71,46 @@ export interface Order {
   status_history: { status: string; at: string }[];
 }
 
+export type ServiceMood = 1 | 2 | 3 | 4 | 5;
+export type ServiceSentiment = 'positive' | 'neutral' | 'negative';
+
+export interface ServiceFeedbackResult {
+  pointsEarned: number;
+  sentiment: ServiceSentiment;
+  // celebrate → invite a public review; thanks → simple acknowledgement;
+  // recover → service failed the guest, offer to make it right.
+  recommendation: 'celebrate' | 'thanks' | 'recover';
+}
+
+export interface ServiceFeedbackInput {
+  orderId: string;
+  mood: ServiceMood;
+  tags?: string[];
+  note?: string;
+}
+
+export function sentimentForMood(mood: ServiceMood): ServiceSentiment {
+  if (mood >= 4) return 'positive';
+  if (mood <= 2) return 'negative';
+  return 'neutral';
+}
+
+function feedbackResultFor(mood: ServiceMood): ServiceFeedbackResult {
+  const sentiment = sentimentForMood(mood);
+  return {
+    sentiment,
+    pointsEarned: mood >= 4 ? 50 : mood === 3 ? 30 : 20,
+    recommendation: mood === 5 ? 'celebrate' : mood >= 3 ? 'thanks' : 'recover',
+  };
+}
+
 interface OrdersState {
   menu: MenuResponse | null;
   menuLoading: boolean;
   cart: CartItem[];
   activeOrders: Order[];
   orderHistory: Order[];
+  feedbackQueue: Order[];
   placing: boolean;
   error: string | null;
 
@@ -91,11 +128,23 @@ interface OrdersState {
     paymentMethod: PaymentMethod,
     opts?: { notes?: string; scheduledFor?: string | null },
   ) => Promise<Order>;
+  requestService: (
+    reservationId: string,
+    type: string,
+    item: { name: string; price: number; etaMinutes?: number },
+    opts?: { notes?: string; scheduledFor?: string | null },
+  ) => Promise<Order>;
   reorder: (order: Order) => void;
   simulateOrderProgress: (orderId: string) => void;
   fetchActiveOrders: () => Promise<void>;
   updateOrderStatus: (orderId: string, status: string) => void;
   rateOrder: (orderId: string, rating: number, feedback?: string) => Promise<void>;
+
+  // Emotion-aware per-service feedback. Any completed service is queued so a
+  // mood prompt can surface globally, regardless of which screen the guest is on.
+  enqueueFeedback: (order: Order) => void;
+  dismissFeedback: (orderId: string) => void;
+  submitServiceFeedback: (input: ServiceFeedbackInput) => Promise<ServiceFeedbackResult>;
 }
 
 const STAFF_POOL = [
@@ -110,15 +159,17 @@ function makeFakeOrder(args: {
   total: number;
   notes?: string;
   scheduledFor: string | null;
+  type?: string;
+  etaMinutes?: number;
 }): Order {
   const now = new Date();
-  const eta = 18;
+  const eta = args.etaMinutes ?? 18;
   const id = `local-${Math.random().toString(36).slice(2, 10)}`;
   const staff = STAFF_POOL[Math.floor(Math.random() * STAFF_POOL.length)]!;
   return {
     id,
     reservation_id: args.reservationId,
-    type: 'food',
+    type: args.type ?? 'food',
     status: 'pending',
     items: args.items,
     total_amount: args.total,
@@ -127,6 +178,9 @@ function makeFakeOrder(args: {
     accepted_at: null,
     completed_at: null,
     guest_rating: null,
+    guest_mood: null,
+    guest_sentiment: null,
+    guest_feedback_tags: [],
     guest_feedback: null,
     notes: args.notes ?? null,
     created_at: now.toISOString(),
@@ -142,6 +196,7 @@ export const useOrdersStore = create<OrdersState>((set, get) => ({
   cart: [],
   activeOrders: [],
   orderHistory: [],
+  feedbackQueue: [],
   placing: false,
   error: null,
 
@@ -247,6 +302,47 @@ export const useOrdersStore = create<OrdersState>((set, get) => ({
     }
   },
 
+  requestService: async (reservationId, type, item, opts) => {
+    set({ placing: true, error: null });
+    const items: OrderApiItem[] = [
+      {
+        name: item.name,
+        quantity: 1,
+        unit_price: item.price,
+        ...(opts?.notes ? { notes: opts.notes } : {}),
+      },
+    ];
+
+    try {
+      const { data } = await ordersApi.post<Order>('/orders', {
+        reservation_id: reservationId,
+        type,
+        items,
+        payment_method: 'folio',
+        ...(opts?.notes ? { notes: opts.notes } : {}),
+        ...(opts?.scheduledFor ? { scheduled_for: opts.scheduledFor } : {}),
+      });
+      set({ placing: false, activeOrders: [data, ...get().activeOrders] });
+      get().simulateOrderProgress(data.id);
+      return data;
+    } catch (err) {
+      // Backend unreachable / not seeded — fall back to a local order so the
+      // request → tracking flow still demos end-to-end.
+      const fake = makeFakeOrder({
+        reservationId,
+        items,
+        total: item.price,
+        type,
+        etaMinutes: item.etaMinutes,
+        notes: opts?.notes,
+        scheduledFor: opts?.scheduledFor ?? null,
+      });
+      set({ placing: false, activeOrders: [fake, ...get().activeOrders] });
+      get().simulateOrderProgress(fake.id);
+      return fake;
+    }
+  },
+
   simulateOrderProgress: (orderId) => {
     // Compressed demo timeline: pending → accepted (6s) → in_progress (16s) → completed (40s).
     // Skips if backend later sends real updates (updateOrderStatus is idempotent enough).
@@ -314,6 +410,10 @@ export const useOrdersStore = create<OrdersState>((set, get) => ({
         activeOrders: active.filter((o) => o.id !== orderId),
         orderHistory: [updated, ...get().orderHistory],
       });
+      // A finished service the guest hasn't rated → queue the emotion prompt.
+      if (next === 'completed' && !updated.guest_mood) {
+        get().enqueueFeedback(updated);
+      }
     } else {
       const copy = [...active];
       copy[idx] = updated;
@@ -337,5 +437,54 @@ export const useOrdersStore = create<OrdersState>((set, get) => ({
     } catch (err) {
       set({ error: err instanceof Error ? err.message : 'Failed to rate order' });
     }
+  },
+
+  enqueueFeedback: (order) => {
+    const queue = get().feedbackQueue;
+    if (queue.some((o) => o.id === order.id) || order.guest_mood) return;
+    set({ feedbackQueue: [...queue, order] });
+  },
+
+  dismissFeedback: (orderId) => {
+    set({ feedbackQueue: get().feedbackQueue.filter((o) => o.id !== orderId) });
+  },
+
+  submitServiceFeedback: async (input) => {
+    const result = feedbackResultFor(input.mood);
+    const rating = input.mood;
+    const note = [input.tags?.join(', '), input.note?.trim()]
+      .filter(Boolean)
+      .join(' — ') || undefined;
+
+    // Optimistically record on the order and clear it from the queue.
+    set({
+      feedbackQueue: get().feedbackQueue.filter((o) => o.id !== input.orderId),
+      orderHistory: get().orderHistory.map((o) =>
+        o.id === input.orderId
+          ? {
+              ...o,
+              guest_mood: input.mood,
+              guest_rating: rating,
+              guest_sentiment: result.sentiment,
+              guest_feedback_tags: input.tags ?? [],
+              guest_feedback: note ?? o.guest_feedback,
+            }
+          : o,
+      ),
+    });
+
+    try {
+      await ordersApi.patch(`/orders/${input.orderId}/rate`, {
+        rating,
+        mood: input.mood,
+        sentiment: result.sentiment,
+        ...(input.tags?.length ? { tags: input.tags } : {}),
+        ...(note ? { feedback: note } : {}),
+      });
+    } catch {
+      // Backend not reachable — the optimistic local update already stands so
+      // the demo flow completes; the derived result is returned regardless.
+    }
+    return result;
   },
 }));

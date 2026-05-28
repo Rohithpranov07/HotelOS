@@ -279,8 +279,11 @@ model Order {
   slaDeadline     DateTime?   @db.Timestamptz
   acceptedAt      DateTime?   @db.Timestamptz
   completedAt     DateTime?   @db.Timestamptz
-  guestRating     Int?
-  guestFeedback   String?
+  guestRating       Int?
+  guestMood         Int?
+  guestSentiment    String?   @db.VarChar(16)
+  guestFeedbackTags String[]  @default([])
+  guestFeedback     String?
   source          String      @default("app") @db.VarChar(20)
   notes           String?
   createdAt       DateTime    @default(now()) @db.Timestamptz

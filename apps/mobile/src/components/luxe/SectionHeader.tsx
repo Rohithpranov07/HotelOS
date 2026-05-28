@@ -1,13 +1,14 @@
-import { StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Luxe, LuxeFonts } from '../../theme/luxe';
 
 interface SectionHeaderProps {
   kicker: string;
   title: string;
   right?: string;
+  onRightPress?: () => void;
 }
 
-export function SectionHeader({ kicker, title, right }: SectionHeaderProps) {
+export function SectionHeader({ kicker, title, right, onRightPress }: SectionHeaderProps) {
   return (
     <View style={styles.row}>
       <View style={{ flex: 1, minWidth: 0 }}>
@@ -16,7 +17,15 @@ export function SectionHeader({ kicker, title, right }: SectionHeaderProps) {
           {title}
         </Text>
       </View>
-      {right ? <Text style={styles.right}>{right}</Text> : null}
+      {right ? (
+        onRightPress ? (
+          <Pressable onPress={onRightPress} hitSlop={12} style={styles.rightPress}>
+            <Text style={styles.right}>{right}</Text>
+          </Pressable>
+        ) : (
+          <Text style={styles.right}>{right}</Text>
+        )
+      ) : null}
     </View>
   );
 }
@@ -45,12 +54,12 @@ const styles = StyleSheet.create({
     color: Luxe.ivory,
     letterSpacing: -0.6,
   },
+  rightPress: { paddingBottom: 4 },
   right: {
     fontFamily: LuxeFonts.monoMedium,
     fontSize: 10,
     color: Luxe.ivoryDim,
     letterSpacing: 1.4,
     textTransform: 'uppercase',
-    paddingBottom: 4,
   },
 });

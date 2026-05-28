@@ -1,4 +1,4 @@
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Luxe, LuxeFonts } from '../../theme/luxe';
 
@@ -10,6 +10,7 @@ export interface DiscoveryItem {
   meta: string;
   byline?: string;
   tone?: Tone;
+  onPress?: () => void;
 }
 
 const PALETTES: Record<Tone, { base: string; a: string; b: string; c: string }> = {
@@ -42,11 +43,9 @@ export function DiscoveryRail({ items }: DiscoveryRailProps) {
 
 function DiscoveryCard({ item }: { item: DiscoveryItem }) {
   const palette = PALETTES[item.tone ?? 'amber'];
-  return (
+  const inner = (
     <View style={styles.card}>
-      {/* base */}
       <View style={[StyleSheet.absoluteFill, { backgroundColor: palette.base }]} />
-      {/* atmospheric pools */}
       <LinearGradient
         colors={[palette.b, 'transparent']}
         locations={[0, 0.6]}
@@ -61,30 +60,37 @@ function DiscoveryCard({ item }: { item: DiscoveryItem }) {
         end={{ x: 0, y: 0.2 }}
         style={StyleSheet.absoluteFill}
       />
-      {/* legibility fade */}
       <LinearGradient
         colors={['rgba(8,7,10,0.10)', 'rgba(8,7,10,0.92)']}
         locations={[0.35, 1]}
         style={StyleSheet.absoluteFill}
       />
-
       <View style={styles.topRow}>
         <Text style={styles.kicker}>{item.kicker}</Text>
         <View style={styles.metaPill}>
           <Text style={styles.metaText}>{item.meta}</Text>
         </View>
       </View>
-
       <View style={styles.bottom}>
         <Text style={styles.title}>{item.title}</Text>
         {item.byline ? <Text style={styles.byline}>{item.byline}</Text> : null}
       </View>
     </View>
   );
+
+  if (item.onPress) {
+    return (
+      <Pressable onPress={item.onPress} style={styles.cardPress}>
+        {inner}
+      </Pressable>
+    );
+  }
+  return inner;
 }
 
 const styles = StyleSheet.create({
   scrollContent: { paddingHorizontal: 28, gap: 14 },
+  cardPress: { borderRadius: 26 },
   card: {
     width: 280,
     height: 360,

@@ -12,13 +12,18 @@ export interface TimelineItem {
 interface StayTimelineProps {
   items: TimelineItem[];
   dayLabel?: string;
+  kicker?: string;
 }
 
-export function StayTimeline({ items, dayLabel = 'Day 2 of 4' }: StayTimelineProps) {
+export function StayTimeline({ items, dayLabel = 'Day 2 of 4', kicker }: StayTimelineProps) {
+  const h = new Date().getHours();
+  const label =
+    kicker ??
+    (h < 12 ? 'This morning' : h < 17 ? 'This afternoon' : h < 22 ? 'This evening' : 'Tonight');
   return (
     <View style={styles.root}>
       <View style={styles.header}>
-        <Text style={styles.kicker}>This evening</Text>
+        <Text style={styles.kicker}>{label}</Text>
         <Text style={styles.day}>{dayLabel}</Text>
       </View>
       <LinearGradient

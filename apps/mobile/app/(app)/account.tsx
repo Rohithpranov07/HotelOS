@@ -1,9 +1,11 @@
-import { useState } from 'react';
-import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useEffect, useRef, useState } from 'react';
+import { Animated, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useAuthStore } from '../../src/stores/auth.store';
+import { useReservationStore } from '../../src/stores/reservation.store';
 import { useLuxeFonts } from '../../src/lib/useLuxeFonts';
 import { Luxe, LuxeFonts } from '../../src/theme/luxe';
 
@@ -23,11 +25,54 @@ const PREFERENCES = [
   { icon: 'business-outline', label: 'High floor' },
 ] as const;
 
+const TIER_LABEL: Record<string, string> = {
+  BRONZE: 'Bronze',
+  SILVER: 'Silver',
+  GOLD: 'Gold',
+  PLATINUM: 'Obsidian',
+};
+
+const NEXT_TIER: Record<string, string> = {
+  BRONZE: 'Silver',
+  SILVER: 'Gold',
+  GOLD: 'Obsidian',
+  PLATINUM: 'Noir',
+};
+
+const TIER_LADDER = [0, 1000, 5000, 15000, 50000];
+
+function tierProgress(points: number): number {
+  for (let i = 0; i < TIER_LADDER.length - 1; i++) {
+    const lo = TIER_LADDER[i]!;
+    const hi = TIER_LADDER[i + 1]!;
+    if (points < hi) return (points - lo) / (hi - lo);
+  }
+  return 1;
+}
+
+function pointsToNext(points: number): number {
+  for (let i = 0; i < TIER_LADDER.length; i++) {
+    if (points < TIER_LADDER[i]!) return TIER_LADDER[i]! - points;
+  }
+  return 0;
+}
+
+function initials(name: string): string {
+  return name
+    .split(' ')
+    .map((p) => p[0])
+    .filter(Boolean)
+    .slice(0, 2)
+    .join('')
+    .toUpperCase();
+}
+
 export default function AccountScreen() {
   useLuxeFonts();
   const router = useRouter();
   const guest = useAuthStore((s) => s.guest);
   const logout = useAuthStore((s) => s.logout);
+  const reservation = useReservationStore((s) => s.reservation);
   const [showLogout, setShowLogout] = useState(false);
 
   const confirmLogout = () => {
@@ -35,13 +80,79 @@ export default function AccountScreen() {
     void logout();
   };
 
+  const totalStays = PAST_STAYS.length;
+  const totalNights = PAST_STAYS.reduce((a, s) => a + s.nights, 0);
+  const lifetime = PAST_STAYS.reduce((a, s) => a + s.spend, 0);
+  const points = guest?.loyaltyPoints ?? 0;
+  const tier = guest?.loyaltyTier ?? 'BRONZE';
+  const staying = reservation?.status === 'checked_in';
+  const suite = reservation?.room?.roomNumber;
+
   return (
     <View style={styles.root}>
       <SafeAreaView style={{ flex: 1 }} edges={['top']}>
         <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
           <Text style={styles.kicker}>Account</Text>
-          <Text style={styles.title}>{guest?.fullName || 'Guest'}</Text>
-          <Text style={styles.subhead}>{guest?.phone || ''}</Text>
+
+          {/* PROFILE HERO */}
+          <View style={styles.hero}>
+            <LinearGradient
+              colors={['#2A2316', '#1A1610']}
+              start={{ x: 0.5, y: 0 }}
+              end={{ x: 0.5, y: 1 }}
+              style={[StyleSheet.absoluteFill, { borderRadius: 28 }]}
+            />
+            <LinearGradient
+              colors={['rgba(244,201,126,0.18)', 'transparent']}
+              locations={[0, 0.7]}
+              start={{ x: 0.95, y: 0 }}
+              end={{ x: 0.1, y: 1 }}
+              style={[StyleSheet.absoluteFill, { borderRadius: 28 }]}
+            />
+            <View style={styles.heroTop}>
+              <View style={styles.monogram}>
+                <LinearGradient
+                  colors={['#F4C97E', '#D4A857', '#9A7A3F']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={StyleSheet.absoluteFill}
+                />
+                <Text style={styles.monogramText}>{initials(guest?.fullName || 'Guest')}</Text>
+              </View>
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text style={styles.heroName} numberOfLines={1}>
+                  {guest?.fullName || 'Guest'}
+                </Text>
+                <View style={styles.tierPill}>
+                  <Ionicons name="trophy" size={10} color={Luxe.goldBright} />
+                  <Text style={styles.tierPillText}>{TIER_LABEL[tier] ?? tier} member</Text>
+                </View>
+              </View>
+            </View>
+
+            {staying && (
+              <View style={styles.stayingRow}>
+                <PulsingDot />
+                <Text style={styles.stayingText}>
+                  Currently staying{suite ? ` · Suite ${suite}` : ''}
+                </Text>
+              </View>
+            )}
+
+            {/* STATS */}
+            <View style={styles.statStrip}>
+              <Stat value={String(totalStays)} label="Stays" />
+              <View style={styles.statDivider} />
+              <Stat value={String(totalNights)} label="Nights" />
+              <View style={styles.statDivider} />
+              <Stat value={`₹${Math.round(lifetime / 1000)}k`} label="Lifetime" />
+              <View style={styles.statDivider} />
+              <Stat value={points.toLocaleString('en-IN')} label="Points" />
+            </View>
+
+            {/* TIER PROGRESS */}
+            <TierBar points={points} tier={tier} />
+          </View>
 
           <Section label="Profile">
             <Row label="Name" value={guest?.fullName ?? '—'} />
@@ -167,6 +278,91 @@ function Row({ label, value, subtle }: { label: string; value: string; subtle?: 
   );
 }
 
+function Stat({ value, label }: { value: string; label: string }) {
+  return (
+    <View style={styles.statCell}>
+      <Text style={styles.statValue} numberOfLines={1}>{value}</Text>
+      <Text style={styles.statLabel}>{label}</Text>
+    </View>
+  );
+}
+
+function PulsingDot() {
+  const pulse = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulse, { toValue: 1, duration: 1100, useNativeDriver: true }),
+        Animated.timing(pulse, { toValue: 0, duration: 700, useNativeDriver: true }),
+      ]),
+    ).start();
+  }, [pulse]);
+  const scale = pulse.interpolate({ inputRange: [0, 1], outputRange: [1, 2.8] });
+  const opacity = pulse.interpolate({ inputRange: [0, 0.35, 1], outputRange: [0.6, 0.15, 0] });
+  return (
+    <View style={{ width: 7, height: 7, alignItems: 'center', justifyContent: 'center' }}>
+      <Animated.View
+        style={{
+          position: 'absolute',
+          width: 7,
+          height: 7,
+          borderRadius: 3.5,
+          backgroundColor: Luxe.goldBright,
+          transform: [{ scale }],
+          opacity,
+        }}
+      />
+      <View
+        style={{
+          width: 7,
+          height: 7,
+          borderRadius: 3.5,
+          backgroundColor: Luxe.goldBright,
+          shadowColor: Luxe.amberGlow,
+          shadowOpacity: 0.8,
+          shadowRadius: 4,
+        }}
+      />
+    </View>
+  );
+}
+
+function TierBar({ points, tier }: { points: number; tier: string }) {
+  const target = tierProgress(points);
+  const anim = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    Animated.timing(anim, {
+      toValue: target,
+      duration: 900,
+      useNativeDriver: false,
+    }).start();
+  }, [target, anim]);
+  const width = anim.interpolate({ inputRange: [0, 1], outputRange: ['0%', '100%'] });
+  const remaining = pointsToNext(points);
+  const next = NEXT_TIER[tier] ?? 'Next';
+
+  return (
+    <View style={styles.tierBarWrap}>
+      <View style={styles.tierBarHead}>
+        <Text style={styles.tierBarLabel}>
+          {remaining > 0 ? `${remaining.toLocaleString('en-IN')} pts to ${next}` : 'Top tier reached'}
+        </Text>
+        <Text style={styles.tierBarPct}>{Math.round(target * 100)}%</Text>
+      </View>
+      <View style={styles.tierBarTrack}>
+        <Animated.View style={[styles.tierBarFill, { width }]}>
+          <LinearGradient
+            colors={['#9A7A3F', '#F4C97E']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            style={StyleSheet.absoluteFill}
+          />
+        </Animated.View>
+      </View>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: Luxe.obsidian },
   scrollContent: { paddingHorizontal: 24, paddingTop: 16, paddingBottom: 140 },
@@ -192,6 +388,119 @@ const styles = StyleSheet.create({
     letterSpacing: 1.2,
     color: Luxe.titanium,
   },
+
+  // PROFILE HERO
+  hero: {
+    marginTop: 14,
+    padding: 22,
+    borderRadius: 28,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(244,201,126,0.28)',
+  },
+  heroTop: { flexDirection: 'row', alignItems: 'center', gap: 16 },
+  monogram: {
+    width: 60,
+    height: 60,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  monogramText: {
+    fontFamily: LuxeFonts.serif,
+    fontSize: 24,
+    color: '#1A1206',
+    letterSpacing: 0.5,
+  },
+  heroName: {
+    fontFamily: LuxeFonts.serif,
+    fontSize: 28,
+    color: Luxe.ivory,
+    letterSpacing: -0.8,
+  },
+  tierPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    alignSelf: 'flex-start',
+    marginTop: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 9999,
+    backgroundColor: 'rgba(244,201,126,0.10)',
+    borderWidth: 0.5,
+    borderColor: 'rgba(244,201,126,0.3)',
+  },
+  tierPillText: {
+    fontFamily: LuxeFonts.monoMedium,
+    fontSize: 9.5,
+    color: Luxe.goldBright,
+    letterSpacing: 1,
+    textTransform: 'uppercase',
+  },
+  stayingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 9,
+    marginTop: 16,
+  },
+  stayingText: {
+    fontFamily: LuxeFonts.monoMedium,
+    fontSize: 10,
+    color: Luxe.ivoryDim,
+    letterSpacing: 1.2,
+    textTransform: 'uppercase',
+  },
+  statStrip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 20,
+    paddingTop: 18,
+    borderTopWidth: 0.5,
+    borderTopColor: 'rgba(255,240,210,0.1)',
+  },
+  statCell: { flex: 1, alignItems: 'center' },
+  statValue: { fontFamily: LuxeFonts.serif, fontSize: 19, color: Luxe.ivory, letterSpacing: -0.4 },
+  statLabel: {
+    fontFamily: LuxeFonts.monoMedium,
+    fontSize: 8,
+    color: Luxe.muted,
+    letterSpacing: 1.2,
+    textTransform: 'uppercase',
+    marginTop: 5,
+  },
+  statDivider: { width: StyleSheet.hairlineWidth, height: 30, backgroundColor: 'rgba(255,240,210,0.1)' },
+
+  // TIER BAR
+  tierBarWrap: { marginTop: 20 },
+  tierBarHead: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 9,
+  },
+  tierBarLabel: {
+    fontFamily: LuxeFonts.monoMedium,
+    fontSize: 9.5,
+    color: Luxe.gold,
+    letterSpacing: 1,
+    textTransform: 'uppercase',
+  },
+  tierBarPct: {
+    fontFamily: LuxeFonts.monoMedium,
+    fontSize: 9.5,
+    color: Luxe.ivoryDim,
+    letterSpacing: 0.6,
+  },
+  tierBarTrack: {
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: 'rgba(255,240,210,0.08)',
+    overflow: 'hidden',
+  },
+  tierBarFill: { height: 6, borderRadius: 3, overflow: 'hidden' },
+
   section: { marginTop: 28 },
   sectionLabel: {
     fontFamily: LuxeFonts.monoMedium,
