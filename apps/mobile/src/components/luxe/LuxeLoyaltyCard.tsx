@@ -26,16 +26,17 @@ export function LuxeLoyaltyCard({
 
   return (
     <LinearGradient
-      colors={[Luxe.obsidian, '#1a1612']}
+      colors={['#1a1612', Luxe.obsidian, '#14110e']}
+      locations={[0, 0.5, 1]}
       start={{ x: 0, y: 0 }}
       end={{ x: 1, y: 1 }}
       style={styles.card}
     >
       <LinearGradient
-        colors={['rgba(244,201,126,0.18)', 'transparent']}
-        locations={[0, 0.55]}
+        colors={['rgba(244,201,126,0.26)', 'rgba(244,201,126,0.04)', 'transparent']}
+        locations={[0, 0.4, 0.7]}
         start={{ x: 0, y: 0 }}
-        end={{ x: 0.7, y: 0.7 }}
+        end={{ x: 0.75, y: 0.75 }}
         style={StyleSheet.absoluteFill}
       />
       <View style={styles.topHairline} />
@@ -43,7 +44,7 @@ export function LuxeLoyaltyCard({
       <View style={styles.row}>
         <View style={{ flex: 1 }}>
           <Text style={styles.society}>
-            Octave Society
+            Kodai Society
             <Text style={{ color: Luxe.muted }}>{`  ·  ${since}`}</Text>
           </Text>
           <Text style={styles.tier}>
@@ -84,13 +85,13 @@ export function LuxeLoyaltyCard({
 
 const styles = StyleSheet.create({
   card: {
-    height: 230,
+    height: 240,
     borderRadius: 26,
     padding: 24,
     paddingBottom: 22,
     overflow: 'hidden',
     borderWidth: 0.5,
-    borderColor: 'rgba(212,168,87,0.22)',
+    borderColor: 'rgba(212,168,87,0.34)',
   },
   topHairline: {
     position: 'absolute',
@@ -98,7 +99,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     height: 1,
-    backgroundColor: 'rgba(244,201,126,0.5)',
+    backgroundColor: 'rgba(244,201,126,0.65)',
   },
   row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
   society: {
@@ -157,10 +158,10 @@ const styles = StyleSheet.create({
   },
   progressRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 8 },
   barTrack: {
-    width: 68,
+    width: 80,
     height: 3,
     borderRadius: 2,
-    backgroundColor: 'rgba(255,240,210,0.10)',
+    backgroundColor: 'rgba(255,240,210,0.12)',
     overflow: 'hidden',
   },
   barFill: { height: 3, borderRadius: 2 },

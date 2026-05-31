@@ -111,10 +111,10 @@ function demoSummary(): LoyaltySummary {
 
 function demoStatement(page: number, perPage = 10): LoyaltyTransaction[] {
   const seed = [
-    { type: 'earn' as const, points: 148, reason: 'Stay earnings · Hôtel Octave', daysAgo: 2 },
+    { type: 'earn' as const, points: 148, reason: 'Stay earnings · Hotel Kodai International', daysAgo: 2 },
     { type: 'redeem' as const, points: -500, reason: 'Redeemed at F&B', daysAgo: 3 },
     { type: 'bonus' as const, points: 100, reason: 'Review bonus', daysAgo: 28 },
-    { type: 'earn' as const, points: 320, reason: 'Stay earnings · Kyoto', daysAgo: 62 },
+    { type: 'earn' as const, points: 320, reason: 'Stay earnings · Kodaikanal', daysAgo: 62 },
     { type: 'earn' as const, points: 240, reason: 'Spa booking', daysAgo: 90 },
     { type: 'expire' as const, points: -120, reason: 'Points expiry', daysAgo: 120 },
     { type: 'earn' as const, points: 410, reason: 'Stay earnings · Mumbai', daysAgo: 160 },

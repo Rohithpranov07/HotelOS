@@ -11,6 +11,7 @@ interface SectionHeaderProps {
 export function SectionHeader({ kicker, title, right, onRightPress }: SectionHeaderProps) {
   return (
     <View style={styles.row}>
+      <View style={styles.accentBar} />
       <View style={{ flex: 1, minWidth: 0 }}>
         <Text style={styles.kicker}>{kicker}</Text>
         <Text style={styles.title} numberOfLines={1}>
@@ -36,8 +37,16 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'flex-end',
     paddingHorizontal: 28,
-    marginBottom: 18,
+    marginBottom: 20,
     gap: 16,
+  },
+  accentBar: {
+    width: 2,
+    height: 36,
+    borderRadius: 2,
+    backgroundColor: 'rgba(212,168,87,0.60)',
+    marginRight: 12,
+    marginBottom: 2,
   },
   kicker: {
     fontFamily: LuxeFonts.monoMedium,
@@ -49,10 +58,10 @@ const styles = StyleSheet.create({
   },
   title: {
     fontFamily: LuxeFonts.serif,
-    fontSize: 28,
-    lineHeight: 28,
+    fontSize: 30,
+    lineHeight: 30,
     color: Luxe.ivory,
-    letterSpacing: -0.6,
+    letterSpacing: -0.7,
   },
   rightPress: { paddingBottom: 4 },
   right: {

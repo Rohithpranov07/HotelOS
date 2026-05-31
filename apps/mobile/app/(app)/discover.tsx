@@ -1,4 +1,5 @@
 import { StyleSheet, Text, View, ScrollView, Pressable } from 'react-native';
+import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -40,7 +41,7 @@ export default function DiscoverScreen() {
         <View style={[styles.hero, { paddingTop: insets.top + 14 }]}>
           <View style={[StyleSheet.absoluteFill, { backgroundColor: Luxe.obsidian }]} />
           <LinearGradient
-            colors={['rgba(244,201,126,0.22)', 'rgba(244,201,126,0.05)', 'transparent']}
+            colors={['rgba(244,201,126,0.38)', 'rgba(244,201,126,0.10)', 'transparent']}
             locations={[0, 0.4, 0.72]}
             start={{ x: 1, y: 0 }}
             end={{ x: 0.2, y: 0.7 }}
@@ -106,50 +107,93 @@ export default function DiscoverScreen() {
 
 function GridCard({ item, tall }: { item: DiscoveryItem; tall?: boolean }) {
   const palette = PALETTES[item.tone ?? 'amber'];
-  const card = (
-    <View style={[styles.card, tall && styles.cardTall]}>
-      <View style={[StyleSheet.absoluteFill, { backgroundColor: palette.base, borderRadius: 22 }]} />
-      <LinearGradient
-        colors={[palette.a, 'transparent']}
-        locations={[0, 0.6]}
-        start={{ x: 0.1, y: 0 }}
-        end={{ x: 0.9, y: 0.8 }}
-        style={[StyleSheet.absoluteFill, { borderRadius: 22 }]}
-      />
-      <LinearGradient
-        colors={[palette.b, 'transparent']}
-        locations={[0, 0.7]}
-        start={{ x: 0.8, y: 0.9 }}
-        end={{ x: 0.1, y: 0.1 }}
-        style={[StyleSheet.absoluteFill, { borderRadius: 22 }]}
-      />
-      <LinearGradient
-        colors={['rgba(8,7,10,0.05)', 'rgba(8,7,10,0.88)']}
-        locations={[0.3, 1]}
-        style={[StyleSheet.absoluteFill, { borderRadius: 22 }]}
-      />
 
+  const overlays = (
+    <>
+      {item.backgroundImage ? (
+        <>
+          {/* Top scrim — keeps kicker and meta pill legible */}
+          <LinearGradient
+            colors={['rgba(4,3,1,0.76)', 'rgba(4,3,1,0.28)', 'transparent']}
+            locations={[0, 0.32, 0.62]}
+            style={[StyleSheet.absoluteFill, { borderRadius: 22 }]}
+          />
+          {/* Bottom scrim — keeps title and byline legible */}
+          <LinearGradient
+            colors={['transparent', 'rgba(5,3,1,0.70)', 'rgba(4,2,0,0.96)']}
+            locations={[0.32, 0.62, 1]}
+            style={[StyleSheet.absoluteFill, { borderRadius: 22 }]}
+          />
+        </>
+      ) : (
+        <>
+          <View style={[StyleSheet.absoluteFill, { backgroundColor: palette.base, borderRadius: 22 }]} />
+          <LinearGradient
+            colors={[palette.a, 'transparent']}
+            locations={[0, 0.6]}
+            start={{ x: 0.1, y: 0 }}
+            end={{ x: 0.9, y: 0.8 }}
+            style={[StyleSheet.absoluteFill, { borderRadius: 22 }]}
+          />
+          <LinearGradient
+            colors={[palette.b, 'transparent']}
+            locations={[0, 0.7]}
+            start={{ x: 0.8, y: 0.9 }}
+            end={{ x: 0.1, y: 0.1 }}
+            style={[StyleSheet.absoluteFill, { borderRadius: 22 }]}
+          />
+          <LinearGradient
+            colors={['rgba(8,7,10,0.05)', 'rgba(8,7,10,0.88)']}
+            locations={[0.3, 1]}
+            style={[StyleSheet.absoluteFill, { borderRadius: 22 }]}
+          />
+        </>
+      )}
       <View style={styles.cardTop}>
-        <Text style={styles.cardKicker}>{item.kicker}</Text>
-        <View style={styles.cardMetaPill}>
+        <View style={[styles.kickerCapsule, item.backgroundImage ? styles.kickerCapsuleOnImage : null]}>
+          <Text style={[styles.cardKicker, item.backgroundImage ? styles.cardKickerOnImage : null]}>
+            {item.kicker}
+          </Text>
+        </View>
+        <View style={[styles.cardMetaPill, item.backgroundImage ? styles.cardMetaPillOnImage : null]}>
           <Text style={styles.cardMeta}>{item.meta}</Text>
         </View>
       </View>
-
       <View style={styles.cardBottom}>
-        <Text style={styles.cardTitle}>{item.title}</Text>
+        <Text style={[styles.cardTitle, item.backgroundImage ? styles.cardTitleOnImage : null]}>
+          {item.title}
+        </Text>
         {item.byline ? (
-          <Text style={styles.cardByline} numberOfLines={2}>
+          <Text
+            style={[styles.cardByline, item.backgroundImage ? styles.cardBylineOnImage : null]}
+            numberOfLines={2}
+          >
             {item.byline}
           </Text>
         ) : null}
         {item.onPress ? (
-          <View style={styles.cardArrow}>
+          <View style={[styles.cardArrow, item.backgroundImage ? styles.cardArrowOnImage : null]}>
             <Ionicons name="arrow-forward" size={12} color={Luxe.goldBright} />
           </View>
         ) : null}
       </View>
+    </>
+  );
+
+  const card = item.backgroundImage ? (
+    <View style={[styles.card, tall && styles.cardTall]}>
+      <Image
+        source={item.backgroundImage}
+        style={[StyleSheet.absoluteFill, styles.cardBgImage]}
+        contentFit="cover"
+        cachePolicy="memory-disk"
+        priority="high"
+        transition={180}
+      />
+      {overlays}
     </View>
+  ) : (
+    <View style={[styles.card, tall && styles.cardTall]}>{overlays}</View>
   );
 
   if (item.onPress) {
@@ -237,7 +281,13 @@ const styles = StyleSheet.create({
     color: Luxe.ivory,
     letterSpacing: -1,
   },
-  heroTitleItalic: { fontFamily: LuxeFonts.serifItalic, color: Luxe.goldBright },
+  heroTitleItalic: {
+    fontFamily: LuxeFonts.serifItalic,
+    color: Luxe.goldBright,
+    textShadowColor: 'rgba(244,201,126,0.28)',
+    textShadowOffset: { width: 0, height: 3 },
+    textShadowRadius: 18,
+  },
   heroSub: {
     fontFamily: LuxeFonts.sansLight,
     fontSize: 13,
@@ -262,9 +312,10 @@ const styles = StyleSheet.create({
     height: 220,
     overflow: 'hidden',
     borderWidth: 0.5,
-    borderColor: Luxe.hairline,
+    borderColor: 'rgba(255,240,210,0.10)',
   },
   cardTall: { height: 290 },
+  cardBgImage: { borderRadius: 22, opacity: 0.82 },
   cardTop: {
     position: 'absolute',
     top: 14,
@@ -273,6 +324,21 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    gap: 6,
+  },
+  kickerCapsule: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  kickerCapsuleOnImage: {
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+    borderRadius: 9999,
+    backgroundColor: 'rgba(0,0,0,0.42)',
+    borderWidth: 0.5,
+    borderColor: 'rgba(255,240,210,0.16)',
+    flex: 0,
   },
   cardKicker: {
     fontFamily: LuxeFonts.monoMedium,
@@ -281,6 +347,12 @@ const styles = StyleSheet.create({
     letterSpacing: 1.6,
     textTransform: 'uppercase',
   },
+  cardKickerOnImage: {
+    color: 'rgba(244,201,126,1)',
+    textShadowColor: 'rgba(0,0,0,0.55)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
+  },
   cardMetaPill: {
     paddingHorizontal: 8,
     paddingVertical: 3,
@@ -288,6 +360,10 @@ const styles = StyleSheet.create({
     borderWidth: 0.5,
     borderColor: 'rgba(255,240,210,0.18)',
     backgroundColor: 'rgba(8,7,10,0.4)',
+  },
+  cardMetaPillOnImage: {
+    borderColor: 'rgba(255,240,210,0.28)',
+    backgroundColor: 'rgba(0,0,0,0.46)',
   },
   cardMeta: {
     fontFamily: LuxeFonts.monoMedium,
@@ -303,6 +379,11 @@ const styles = StyleSheet.create({
     color: Luxe.ivory,
     letterSpacing: -0.4,
   },
+  cardTitleOnImage: {
+    textShadowColor: 'rgba(0,0,0,0.55)',
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 8,
+  },
   cardByline: {
     fontFamily: LuxeFonts.sansLight,
     fontSize: 10.5,
@@ -310,16 +391,25 @@ const styles = StyleSheet.create({
     color: Luxe.ivoryDim,
     marginTop: 6,
   },
+  cardBylineOnImage: {
+    textShadowColor: 'rgba(0,0,0,0.45)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 4,
+  },
   cardArrow: {
     marginTop: 10,
-    width: 24,
-    height: 24,
-    borderRadius: 12,
+    width: 26,
+    height: 26,
+    borderRadius: 13,
     backgroundColor: 'rgba(244,201,126,0.12)',
     borderWidth: 0.5,
     borderColor: 'rgba(244,201,126,0.28)',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  cardArrowOnImage: {
+    backgroundColor: 'rgba(0,0,0,0.40)',
+    borderColor: 'rgba(244,201,126,0.50)',
   },
 
   bottomFade: { position: 'absolute', left: 0, right: 0, bottom: 0, height: 110 },

@@ -1,10 +1,4 @@
-"""Service configuration.
-
-All third-party API keys are optional. When absent, the corresponding
-features degrade gracefully (sentiment-only classification, canned
-concierge responses, no-op embeddings) so the service still boots in dev
-and tests without secrets.
-"""
+"""Service configuration."""
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -12,21 +6,21 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
-    # Optional third-party credentials — provided later in deploy.
+    # Claude (primary LLM — wire up when ready)
     anthropic_api_key: str | None = None
+    claude_model: str = "claude-sonnet-4-6"
+
+    # Optional — for RAG embeddings (if added later)
     openai_api_key: str | None = None
     pinecone_api_key: str | None = None
     pinecone_index_name: str = "hotel-knowledge-base"
+    embedding_model: str = "text-embedding-3-small"
 
     redis_url: str = "redis://localhost:6379"
     environment: str = "development"
 
-    # Model selection — easy to swap when migrating to newer Claude versions.
-    claude_model: str = "claude-3-5-sonnet-20241022"
-    embedding_model: str = "text-embedding-3-small"
-
     @property
-    def has_anthropic(self) -> bool:
+    def has_claude(self) -> bool:
         return bool(self.anthropic_api_key)
 
     @property

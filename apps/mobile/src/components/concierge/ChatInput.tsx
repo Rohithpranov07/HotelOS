@@ -3,81 +3,136 @@ import {
   Animated,
   Pressable,
   StyleSheet,
+  Text,
   TextInput,
   View,
+  type TextInput as TextInputType,
 } from 'react-native';
+import type { RefObject } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Luxe, LuxeFonts } from '../../theme/luxe';
 
 interface ChatInputProps {
+  inputRef?: RefObject<TextInputType | null>;
   value: string;
   onChangeText: (v: string) => void;
   onSend: () => void;
   onVoice: () => void;
-  voiceActive: boolean;
+  isRecording: boolean;
+  isTranscribing: boolean;
+  voiceError?: string | null;
 }
 
 export function ChatInput({
+  inputRef,
   value,
   onChangeText,
   onSend,
   onVoice,
-  voiceActive,
+  isRecording,
+  isTranscribing,
+  voiceError,
 }: ChatInputProps) {
+  const showVoiceUI = isRecording || isTranscribing;
+
   return (
-    <View style={styles.wrap}>
-      <View style={styles.tint} />
-      <View style={styles.border} pointerEvents="none" />
-      <LinearGradient
-        colors={['transparent', 'rgba(244,201,126,0.30)', 'transparent']}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 0 }}
-        style={styles.topHairline}
-      />
+    <View>
+      {voiceError ? (
+        <View style={styles.errorBanner}>
+          <Text style={styles.errorText}>{voiceError}</Text>
+        </View>
+      ) : null}
 
-      <View style={styles.row}>
-        <Pressable style={styles.iconBtn}>
-          <Ionicons name="add" size={16} color={Luxe.titanium} />
-        </Pressable>
+      <View style={styles.wrap}>
+        <View style={styles.tint} />
+        <View style={styles.border} pointerEvents="none" />
+        <LinearGradient
+          colors={['transparent', 'rgba(244,201,126,0.30)', 'transparent']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
+          style={styles.topHairline}
+        />
 
-        {voiceActive ? (
-          <Waveform />
-        ) : (
-          <TextInput
-            value={value}
-            onChangeText={onChangeText}
-            onSubmitEditing={() => value && onSend()}
-            placeholder="Ask the concierge…"
-            placeholderTextColor={Luxe.muted}
-            style={styles.input}
-            returnKeyType="send"
-          />
-        )}
-
-        {value ? (
-          <Pressable onPress={onSend} style={styles.sendBtn}>
-            <Ionicons name="arrow-up" size={16} color="#1A1410" />
+        <View style={styles.row}>
+          <Pressable style={styles.iconBtn}>
+            <Ionicons name="add" size={16} color={Luxe.titanium} />
           </Pressable>
-        ) : (
-          <Pressable
-            onPress={onVoice}
-            style={[styles.micBtn, voiceActive && styles.micBtnActive]}
-          >
-            <Ionicons
-              name="mic-outline"
-              size={16}
-              color={voiceActive ? '#1A1410' : Luxe.goldBright}
+
+          {isTranscribing ? (
+            <TranscribingPulse />
+          ) : isRecording ? (
+            <Waveform />
+          ) : (
+            <TextInput
+              ref={inputRef}
+              value={value}
+              onChangeText={onChangeText}
+              onSubmitEditing={() => value && onSend()}
+              placeholder="Ask the concierge…"
+              placeholderTextColor={Luxe.muted}
+              style={styles.input}
+              returnKeyType="send"
             />
-          </Pressable>
-        )}
+          )}
+
+          {value && !showVoiceUI ? (
+            <Pressable onPress={onSend} style={styles.sendBtn}>
+              <Ionicons name="arrow-up" size={16} color="#1A1410" />
+            </Pressable>
+          ) : (
+            <Pressable
+              onPress={onVoice}
+              style={[
+                styles.micBtn,
+                isRecording && styles.micBtnActive,
+                isTranscribing && styles.micBtnTranscribing,
+              ]}
+              disabled={isTranscribing}
+            >
+              {isTranscribing ? (
+                <Ionicons name="ellipsis-horizontal" size={14} color={Luxe.gold} />
+              ) : (
+                <Ionicons
+                  name={isRecording ? 'stop' : 'mic-outline'}
+                  size={16}
+                  color={isRecording ? '#1A1410' : Luxe.goldBright}
+                />
+              )}
+            </Pressable>
+          )}
+        </View>
       </View>
     </View>
   );
 }
 
 function Waveform() {
-  const bars = Array.from({ length: 22 }).map(() => useRef(new Animated.Value(0.4)).current);
+  // Rules of Hooks — must call in the same order every render.
+  const b0 = useRef(new Animated.Value(0.4)).current;
+  const b1 = useRef(new Animated.Value(0.4)).current;
+  const b2 = useRef(new Animated.Value(0.4)).current;
+  const b3 = useRef(new Animated.Value(0.4)).current;
+  const b4 = useRef(new Animated.Value(0.4)).current;
+  const b5 = useRef(new Animated.Value(0.4)).current;
+  const b6 = useRef(new Animated.Value(0.4)).current;
+  const b7 = useRef(new Animated.Value(0.4)).current;
+  const b8 = useRef(new Animated.Value(0.4)).current;
+  const b9 = useRef(new Animated.Value(0.4)).current;
+  const b10 = useRef(new Animated.Value(0.4)).current;
+  const b11 = useRef(new Animated.Value(0.4)).current;
+  const b12 = useRef(new Animated.Value(0.4)).current;
+  const b13 = useRef(new Animated.Value(0.4)).current;
+  const b14 = useRef(new Animated.Value(0.4)).current;
+  const b15 = useRef(new Animated.Value(0.4)).current;
+  const b16 = useRef(new Animated.Value(0.4)).current;
+  const b17 = useRef(new Animated.Value(0.4)).current;
+  const b18 = useRef(new Animated.Value(0.4)).current;
+  const b19 = useRef(new Animated.Value(0.4)).current;
+  const b20 = useRef(new Animated.Value(0.4)).current;
+  const b21 = useRef(new Animated.Value(0.4)).current;
+
+  const bars = [b0,b1,b2,b3,b4,b5,b6,b7,b8,b9,b10,b11,b12,b13,b14,b15,b16,b17,b18,b19,b20,b21];
 
   useEffect(() => {
     const loops = bars.map((v, i) => {
@@ -100,20 +155,38 @@ function Waveform() {
       return anim;
     });
     return () => loops.forEach((l) => l.stop());
-  }, [bars]);
+  }, []);
 
   return (
     <View style={styles.waveform}>
       {bars.map((v, i) => (
         <Animated.View
           key={i}
-          style={[
-            styles.waveBar,
-            { transform: [{ scaleY: v }] },
-          ]}
+          style={[styles.waveBar, { transform: [{ scaleY: v }] }]}
         />
       ))}
     </View>
+  );
+}
+
+function TranscribingPulse() {
+  const opacity = useRef(new Animated.Value(0.4)).current;
+
+  useEffect(() => {
+    const anim = Animated.loop(
+      Animated.sequence([
+        Animated.timing(opacity, { toValue: 1, duration: 600, useNativeDriver: true }),
+        Animated.timing(opacity, { toValue: 0.4, duration: 600, useNativeDriver: true }),
+      ]),
+    );
+    anim.start();
+    return () => anim.stop();
+  }, [opacity]);
+
+  return (
+    <Animated.View style={[styles.transcribingRow, { opacity }]}>
+      <Text style={styles.transcribingText}>Transcribing…</Text>
+    </Animated.View>
   );
 }
 
@@ -189,6 +262,10 @@ const styles = StyleSheet.create({
     shadowRadius: 12,
     shadowOffset: { width: 0, height: 6 },
   },
+  micBtnTranscribing: {
+    backgroundColor: 'rgba(244,201,126,0.08)',
+    borderColor: 'rgba(244,201,126,0.20)',
+  },
   sendBtn: {
     width: 42,
     height: 42,
@@ -214,5 +291,32 @@ const styles = StyleSheet.create({
     height: 22,
     borderRadius: 2,
     backgroundColor: Luxe.goldBright,
+  },
+  transcribingRow: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  transcribingText: {
+    fontFamily: LuxeFonts.monoMedium,
+    fontSize: 11,
+    letterSpacing: 1.4,
+    color: Luxe.gold,
+    textTransform: 'uppercase',
+  },
+  errorBanner: {
+    marginBottom: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 12,
+    backgroundColor: 'rgba(200,80,60,0.18)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(200,80,60,0.35)',
+  },
+  errorText: {
+    fontFamily: LuxeFonts.sans,
+    fontSize: 12,
+    color: '#E87070',
+    textAlign: 'center',
   },
 });

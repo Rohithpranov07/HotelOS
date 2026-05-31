@@ -36,7 +36,12 @@ def _follow_ups(actions: list[dict]) -> list[str]:
     suggestions: list[str] = []
     if actions:
         suggestions.append("Track my order")
-    suggestions.extend(["What's the checkout time?", "Local restaurant recommendations"])
+    suggestions.extend([
+        "What's the checkout time?",
+        "Cab to Kodaikanal Lake",
+        "What's open at the Oasis Bar?",
+        "Bonfire on the lawn tonight",
+    ])
     return suggestions[:3]
 
 

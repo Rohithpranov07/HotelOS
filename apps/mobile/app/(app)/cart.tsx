@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   Animated,
+  Image,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -134,7 +135,15 @@ export default function CartScreen() {
               {cart.map((item) => (
                 <View key={item.menuItemId} style={styles.cartRow}>
                   <View style={styles.cartAvatar}>
-                    <Ionicons name="restaurant-outline" size={18} color={Luxe.gold} />
+                    {item.imageUrl ? (
+                      <Image
+                        source={{ uri: item.imageUrl }}
+                        style={StyleSheet.absoluteFill}
+                        resizeMode="cover"
+                      />
+                    ) : (
+                      <Ionicons name="restaurant-outline" size={18} color={Luxe.gold} />
+                    )}
                   </View>
                   <View style={{ flex: 1, paddingRight: 14 }}>
                     <Text style={styles.itemName} numberOfLines={2}>
@@ -545,6 +554,7 @@ const styles = StyleSheet.create({
     width: 46,
     height: 46,
     borderRadius: 14,
+    overflow: 'hidden',
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: 'rgba(244,201,126,0.06)',

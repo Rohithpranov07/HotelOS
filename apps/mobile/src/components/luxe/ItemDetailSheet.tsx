@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import {
+  Image,
   Modal,
   Pressable,
   ScrollView,
@@ -23,6 +24,7 @@ export interface ItemDetail {
   prepTimeMinutes: number;
   dietaryTags: string[];
   allergens: string[];
+  imageUrl?: string | null;
   tone?: FoodTone;
 }
 
@@ -59,7 +61,12 @@ export function ItemDetailSheet({
           <ScrollView showsVerticalScrollIndicator={false}>
             {/* IMAGE */}
             <View style={styles.imgWrap}>
-              <FoodImage tone={item.tone ?? 'bronze'} showRing showLabel={false} />
+              <FoodImage
+                tone={item.tone ?? 'bronze'}
+                showRing={!item.imageUrl}
+                showLabel={false}
+                imageUrl={item.imageUrl}
+              />
               <LinearGradient
                 colors={['transparent', 'rgba(8,7,10,0.85)']}
                 locations={[0.5, 1]}

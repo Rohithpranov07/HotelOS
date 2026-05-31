@@ -7,9 +7,12 @@ const workspaceRoot = path.resolve(projectRoot, '../..');
 
 const config = getDefaultConfig(projectRoot);
 
-// Monorepo + pnpm: watch the workspace, follow symlinks into .pnpm, and
-// let Metro walk up node_modules so transitive deps (e.g. @babel/runtime,
-// react-native-css-interop) resolve through the pnpm store.
+// Monorepo + pnpm (node-linker=hoisted): all packages land in workspaceRoot/node_modules.
+// watchFolders lets Metro bundle files from outside the project root.
+// nodeModulesPaths tells the resolver where to look.
+// extraNodeModules is a Proxy fallback that maps any unresolved module name
+// directly to workspaceRoot/node_modules — required when node-linker=hoisted
+// hoists expo packages to root and Metro's hierarchical lookup stops at projectRoot.
 config.watchFolders = [workspaceRoot];
 config.resolver.nodeModulesPaths = [
   path.resolve(projectRoot, 'node_modules'),
@@ -17,5 +20,12 @@ config.resolver.nodeModulesPaths = [
 ];
 config.resolver.disableHierarchicalLookup = false;
 config.resolver.unstable_enableSymlinks = true;
+config.resolver.extraNodeModules = new Proxy(
+  {},
+  {
+    get: (_, name) =>
+      path.join(workspaceRoot, 'node_modules', String(name)),
+  }
+);
 
 module.exports = withNativeWind(config, { input: './global.css' });

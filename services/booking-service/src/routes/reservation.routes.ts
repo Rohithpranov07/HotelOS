@@ -105,6 +105,46 @@ export async function reservationRoutes(app: FastifyInstance): Promise<void> {
     return reply.send(toReservationDto(reservation));
   });
 
+  // ─── GET /history (guest) ─ completed past stays ────────────────
+  app.get('/history', { preHandler: requireAuth }, async (request, reply) => {
+    const user = request.user!;
+    if (user.userType !== 'guest') {
+      return reply.status(403).send(errBody('FORBIDDEN', 'Guest token required'));
+    }
+    const past = await prisma.reservation.findMany({
+      where: {
+        guestId: user.userId,
+        status: 'checked_out',
+      },
+      include: { room: true },
+      orderBy: { checkOutDate: 'desc' },
+      take: 20,
+    });
+    const items = past.map((r) => {
+      const checkIn = r.checkInDate;
+      const checkOut = r.checkOutDate;
+      const nights = Math.max(
+        1,
+        Math.round((checkOut.getTime() - checkIn.getTime()) / 86_400_000),
+      );
+      const fmt = (d: Date) =>
+        d.toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' });
+      const roomLabel = r.room
+        ? `${r.room.roomType} · Room ${r.room.roomNumber}`
+        : 'Suite';
+      return {
+        id: r.id,
+        room: roomLabel,
+        dates: `${fmt(checkIn)} → ${fmt(checkOut)}`,
+        check_in_date: checkIn.toISOString().slice(0, 10),
+        check_out_date: checkOut.toISOString().slice(0, 10),
+        nights,
+        spend: num(r.totalAmount),
+      };
+    });
+    return reply.send({ data: items });
+  });
+
   // ─── GET /:id ──────────────────────────────────────────────────
   app.get<{ Params: { id: string } }>(
     '/:id',

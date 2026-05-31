@@ -59,8 +59,8 @@ export function RoomPreferences() {
             <Ionicons name="thermometer-outline" size={17} color={Luxe.goldBright} />
           </View>
           <View style={{ flex: 1, minWidth: 0 }}>
-            <Text style={styles.rowLabel}>Climate</Text>
-            <Text style={styles.rowSub}>Set your suite temperature</Text>
+            <Text style={styles.rowLabel}>Heater</Text>
+            <Text style={styles.rowSub}>Set the suite temperature for the night</Text>
           </View>
         </View>
         <View style={styles.stepper}>

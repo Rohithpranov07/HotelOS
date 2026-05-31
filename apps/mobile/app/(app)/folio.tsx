@@ -293,7 +293,7 @@ export default function FolioScreen() {
         {/* ───────── FOOTNOTE ───────── */}
         <View style={styles.footnote}>
           <Text style={styles.footText}>{guestName}</Text>
-          <Text style={styles.footText}>Hôtel Octave · Folio</Text>
+          <Text style={styles.footText}>Hotel Kodai International · Folio</Text>
         </View>
       </ScrollView>
 
@@ -481,9 +481,9 @@ function buildDemoFolio(reservation: Reservation | null, guestName: string): Fol
       amount: roomRate,
       date: day(i),
     })),
-    { id: 'f1', description: 'Wagyu tasting, for two', type: 'food', amount: 12200, date: day(1) },
-    { id: 'f2', description: 'Cellar pour · Barolo 2016', type: 'food', amount: 4800, date: day(1) },
-    { id: 'f3', description: 'In-suite breakfast', type: 'food', amount: 2400, date: day(2) },
+    { id: 'f1', description: 'Dinner · Rogan Josh, Murgh Makhani, Prawn Masala, Biryani', type: 'food', amount: 1235, date: day(1) },
+    { id: 'f2', description: 'Late night · Dragon Prawns, Chilli Paneer, Filter Coffee ×2', type: 'food', amount: 705, date: day(1) },
+    { id: 'f3', description: 'In-suite breakfast · South Indian Set ×2, Filter Coffee ×2', type: 'food', amount: 700, date: day(2) },
     { id: 'l1', description: 'Dry cleaning · 3 garments', type: 'laundry', amount: 1800, date: day(1) },
     { id: 'a1', description: 'Onsen ritual · spa', type: 'amenity', amount: 6500, date: day(2) },
   ];

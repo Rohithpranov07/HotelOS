@@ -6,22 +6,24 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useAuthStore } from '../../src/stores/auth.store';
 import { useReservationStore } from '../../src/stores/reservation.store';
+import { useContentStore } from '../../src/stores/content.store';
 import { useLuxeFonts } from '../../src/lib/useLuxeFonts';
 import { Luxe, LuxeFonts } from '../../src/theme/luxe';
+import { PremiumScreen } from '../../src/components/luxe/PremiumScreen';
 
-const PAST_STAYS = [
-  { property: 'Hôtel Octave · Mumbai', dates: 'Apr 12 → Apr 14', nights: 2, spend: 38400 },
-  { property: 'Hôtel Octave · Kyoto', dates: 'Jan 06 → Jan 10', nights: 4, spend: 96200 },
-  { property: 'Hôtel Octave · Bengaluru', dates: 'Nov 22 → Nov 23', nights: 1, spend: 14800 },
-  { property: 'Hôtel Octave · Chennai', dates: 'Aug 03 → Aug 05', nights: 2, spend: 28200 },
-  { property: 'Hôtel Octave · Delhi', dates: 'May 18 → May 20', nights: 2, spend: 31700 },
+const FALLBACK_PAST_STAYS = [
+  { room: 'Suite · Room 301', dates: 'Apr 12 → Apr 14, 2025', nights: 2, spend: 22600 },
+  { room: 'Jr. Suite · Room 215', dates: 'Jan 06 → Jan 10, 2025', nights: 4, spend: 36800 },
+  { room: 'Deluxe Double · Room 212', dates: 'Nov 22 → Nov 23, 2024', nights: 1, spend: 7100 },
+  { room: 'Family Room · Room 108', dates: 'Aug 03 → Aug 05, 2024', nights: 2, spend: 16200 },
+  { room: 'Executive Room · Room 104', dates: 'May 18 → May 20, 2024', nights: 2, spend: 11400 },
 ];
 
 const PREFERENCES = [
   { icon: 'leaf-outline', label: 'Vegetarian' },
-  { icon: 'thermometer-outline', label: '22°C' },
+  { icon: 'flame-outline', label: 'Heater · 21°C' },
   { icon: 'bed-outline', label: 'Firm pillow' },
-  { icon: 'newspaper-outline', label: 'Times of India' },
+  { icon: 'newspaper-outline', label: 'The Hindu' },
   { icon: 'business-outline', label: 'High floor' },
 ] as const;
 
@@ -73,13 +75,20 @@ export default function AccountScreen() {
   const guest = useAuthStore((s) => s.guest);
   const logout = useAuthStore((s) => s.logout);
   const reservation = useReservationStore((s) => s.reservation);
+  const apiPastStays = useContentStore((s) => s.pastStays);
+  const fetchPastStays = useContentStore((s) => s.fetchPastStays);
   const [showLogout, setShowLogout] = useState(false);
+
+  useEffect(() => {
+    fetchPastStays();
+  }, [fetchPastStays]);
 
   const confirmLogout = () => {
     setShowLogout(false);
     void logout();
   };
 
+  const PAST_STAYS = apiPastStays && apiPastStays.length > 0 ? apiPastStays : FALLBACK_PAST_STAYS;
   const totalStays = PAST_STAYS.length;
   const totalNights = PAST_STAYS.reduce((a, s) => a + s.nights, 0);
   const lifetime = PAST_STAYS.reduce((a, s) => a + s.spend, 0);
@@ -90,6 +99,7 @@ export default function AccountScreen() {
 
   return (
     <View style={styles.root}>
+      <PremiumScreen>
       <SafeAreaView style={{ flex: 1 }} edges={['top']}>
         <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
           <Text style={styles.kicker}>Account</Text>
@@ -206,9 +216,10 @@ export default function AccountScreen() {
 
           <Section label="Past stays">
             {PAST_STAYS.map((s, i) => (
-              <View key={s.property} style={[styles.stayRow, i === 0 && styles.stayFirst]}>
+              <View key={s.dates} style={[styles.stayRow, i === 0 && styles.stayFirst]}>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.stayTitle}>{s.property}</Text>
+                  <Text style={styles.stayTitle}>Hotel Kodai International</Text>
+                  <Text style={styles.stayRoom}>{s.room}</Text>
                   <Text style={styles.stayMeta}>
                     {s.dates} · {s.nights} {s.nights === 1 ? 'night' : 'nights'}
                   </Text>
@@ -218,15 +229,63 @@ export default function AccountScreen() {
             ))}
           </Section>
 
+          <Section label="Your hotel">
+            <View style={styles.hotelCard}>
+              <LinearGradient
+                colors={['rgba(244,201,126,0.10)', 'rgba(139,111,71,0.03)']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={[StyleSheet.absoluteFill, { borderRadius: 16 }]}
+              />
+              <View style={styles.hotelCardRow}>
+                <Ionicons name="business-outline" size={18} color={Luxe.goldBright} />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.hotelCardName}>Kodai International</Text>
+                  <Text style={styles.hotelCardSub}>The Largest Resort in Kodaikanal · ESTEJI Hotels</Text>
+                </View>
+              </View>
+              <View style={styles.hotelCardDivider} />
+              <View style={styles.hotelCardRow}>
+                <Ionicons name="location-outline" size={16} color={Luxe.gold} />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.hotelCardDetail}>17/328 Lawsghat Road</Text>
+                  <Text style={styles.hotelCardMeta}>Kodaikanal · Tamil Nadu 624 101</Text>
+                </View>
+              </View>
+              <View style={[styles.hotelCardRow, { marginTop: 10 }]}>
+                <Ionicons name="call-outline" size={16} color={Luxe.gold} />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.hotelCardDetail}>+91 9944945190</Text>
+                  <Text style={styles.hotelCardMeta}>Mobile · Landline +91 4542 245190</Text>
+                </View>
+              </View>
+              <View style={[styles.hotelCardRow, { marginTop: 10 }]}>
+                <Ionicons name="mail-outline" size={16} color={Luxe.gold} />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.hotelCardDetail}>reservations@hki.co.in</Text>
+                  <Text style={styles.hotelCardMeta}>Reservations · sales@hki.co.in</Text>
+                </View>
+              </View>
+            </View>
+          </Section>
+
           <Section label="Help & support">
             <Pressable style={styles.cardRow} onPress={() => router.push('/(app)/concierge')}>
-              <Ionicons name="help-circle-outline" size={20} color={Luxe.ivory} />
-              <Text style={[styles.cardTitle, { flex: 1 }]}>Talk to the concierge</Text>
+              <Ionicons name="chatbubble-ellipses-outline" size={20} color={Luxe.ivory} />
+              <Text style={[styles.cardTitle, { flex: 1 }]}>Chat with concierge</Text>
               <Ionicons name="chevron-forward" size={18} color={Luxe.titanium} />
             </Pressable>
             <View style={[styles.cardRow, { marginTop: 8 }]}>
+              <Ionicons name="call-outline" size={20} color={Luxe.ivory} />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.cardTitle}>Call reception</Text>
+                <Text style={styles.cardMeta}>+91 9944945190 · 24 hr</Text>
+              </View>
+              <Ionicons name="open-outline" size={16} color={Luxe.titanium} />
+            </View>
+            <View style={[styles.cardRow, { marginTop: 8 }]}>
               <Ionicons name="document-text-outline" size={20} color={Luxe.ivory} />
-              <Text style={[styles.cardTitle, { flex: 1 }]}>FAQ</Text>
+              <Text style={[styles.cardTitle, { flex: 1 }]}>Guest FAQ</Text>
               <Ionicons name="open-outline" size={16} color={Luxe.titanium} />
             </View>
           </Section>
@@ -237,6 +296,7 @@ export default function AccountScreen() {
           </Pressable>
         </ScrollView>
       </SafeAreaView>
+      </PremiumScreen>
 
       <Modal visible={showLogout} transparent animationType="fade" onRequestClose={() => setShowLogout(false)}>
         <View style={styles.modalBg}>
@@ -569,6 +629,13 @@ const styles = StyleSheet.create({
   },
   stayFirst: { borderTopWidth: 0 },
   stayTitle: { fontFamily: LuxeFonts.sansMedium, fontSize: 14, color: Luxe.ivory },
+  stayRoom: {
+    marginTop: 2,
+    fontFamily: LuxeFonts.mono,
+    fontSize: 11,
+    letterSpacing: 0.6,
+    color: Luxe.gold,
+  },
   stayMeta: {
     marginTop: 3,
     fontFamily: LuxeFonts.mono,
@@ -577,6 +644,21 @@ const styles = StyleSheet.create({
     color: Luxe.titanium,
   },
   staySpend: { fontFamily: LuxeFonts.serif, fontSize: 16, color: Luxe.amberGlow },
+
+  hotelCard: {
+    padding: 18, borderRadius: 16, overflow: 'hidden',
+    borderWidth: 0.5, borderColor: 'rgba(244,201,126,0.22)',
+    backgroundColor: '#0C0A08',
+  },
+  hotelCardRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
+  hotelCardDivider: {
+    height: StyleSheet.hairlineWidth, backgroundColor: 'rgba(255,240,210,0.09)',
+    marginVertical: 14,
+  },
+  hotelCardName: { fontFamily: LuxeFonts.serif, fontSize: 16, color: Luxe.ivory, letterSpacing: -0.3 },
+  hotelCardSub: { fontFamily: LuxeFonts.mono, fontSize: 10, color: Luxe.gold, letterSpacing: 0.6, marginTop: 2 },
+  hotelCardDetail: { fontFamily: LuxeFonts.sansMedium, fontSize: 13, color: Luxe.ivoryDim },
+  hotelCardMeta: { fontFamily: LuxeFonts.mono, fontSize: 10, color: Luxe.muted, letterSpacing: 0.5, marginTop: 2 },
   logoutBtn: {
     marginTop: 36,
     flexDirection: 'row',

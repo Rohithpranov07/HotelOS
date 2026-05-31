@@ -165,7 +165,7 @@ export default function FeedbackScreen() {
           <Text style={styles.title}>How was your stay?</Text>
           {reservation ? (
             <Text style={styles.subhead}>
-              Hôtel Octave · {reservation.checkInDate} → {reservation.checkOutDate}
+              Hotel Kodai International · {reservation.checkInDate} → {reservation.checkOutDate}
             </Text>
           ) : null}
 

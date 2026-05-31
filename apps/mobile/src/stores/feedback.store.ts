@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { bookingApi } from '../lib/api';
+import { bridgeNegativeFeedback } from '../lib/orderBridge';
 
 export type Mood = 1 | 2 | 3 | 4 | 5;
 
@@ -75,6 +76,17 @@ export const useFeedbackStore = create<FeedbackState>((set) => ({
         recommendation: data.recommendation ?? recommendationFor(payload.overall),
       };
       set({ submitting: false, lastResult: result });
+      if (result.sentiment === 'negative') {
+        try {
+          bridgeNegativeFeedback({
+            reservationId: payload.reservationId,
+            overallScore: payload.overall,
+            comment: payload.comment,
+          });
+        } catch {
+          // bridge is best-effort
+        }
+      }
       return result;
     } catch {
       // Backend not reachable — derive locally so the demo flow completes.
@@ -84,6 +96,17 @@ export const useFeedbackStore = create<FeedbackState>((set) => ({
         recommendation: recommendationFor(payload.overall),
       };
       set({ submitting: false, lastResult: result });
+      if (result.sentiment === 'negative') {
+        try {
+          bridgeNegativeFeedback({
+            reservationId: payload.reservationId,
+            overallScore: payload.overall,
+            comment: payload.comment,
+          });
+        } catch {
+          // bridge is best-effort
+        }
+      }
       return result;
     }
   },

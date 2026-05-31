@@ -17,6 +17,7 @@ import { useLuxeFonts } from '../../src/lib/useLuxeFonts';
 import { useReservationStore, type Reservation } from '../../src/stores/reservation.store';
 import { useKeyStore, type KeyResponse } from '../../src/stores/key.store';
 import { HoldToUnlockButton } from '../../src/components/HoldToUnlockButton';
+import { PremiumScreen } from '../../src/components/luxe/PremiumScreen';
 
 import { DEMO_RESERVATION, DEMO_KEY } from '../../src/lib/demo';
 
@@ -84,6 +85,7 @@ export default function KeyScreen() {
 
   return (
     <View style={styles.root}>
+      <PremiumScreen>
       <SafeAreaView style={{ flex: 1 }} edges={['top']}>
         <ScrollView
           contentContainerStyle={{ paddingBottom: 160 }}
@@ -210,6 +212,7 @@ export default function KeyScreen() {
           style={styles.bottomFade}
         />
       </SafeAreaView>
+      </PremiumScreen>
     </View>
   );
 }

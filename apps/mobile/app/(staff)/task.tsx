@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   Linking,
+  Modal,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -13,10 +15,28 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { CameraView, useCameraPermissions, type CameraView as CameraViewType } from 'expo-camera';
+import { useAuthStore } from '../../src/stores/auth.store';
 import { useStaffStore, type TaskStatus } from '../../src/stores/staff.store';
 import { SlaCountdown } from '../../src/components/staff/SlaCountdown';
+import { roleLabel, type StaffRole } from '../../src/lib/staffRoles';
 import { useLuxeFonts } from '../../src/lib/useLuxeFonts';
 import { Luxe, LuxeFonts } from '../../src/theme/luxe';
+
+const ESCALATION_TARGETS: StaffRole[] = [
+  'manager',
+  'front_desk',
+  'housekeeping',
+  'room_service',
+  'concierge',
+];
+
+const ESCALATION_REASONS: string[] = [
+  'Out of stock — needs sourcing',
+  'Guest VIP — manager touch needed',
+  'Cross-department dependency',
+  'Skill / authorisation required',
+  'Quality issue — re-do',
+];
 
 export default function StaffTaskDetailScreen() {
   useLuxeFonts();
@@ -24,10 +44,15 @@ export default function StaffTaskDetailScreen() {
   const router = useRouter();
   const task = useStaffStore((s) => s.tasks.find((t) => t.id === id));
   const updateTaskStatus = useStaffStore((s) => s.updateTaskStatus);
+  const escalateTask = useStaffStore((s) => s.escalateTask);
+  const myRole = useAuthStore((s) => s.staffUser?.role) ?? 'staff';
 
   const [noteDraft, setNoteDraft] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [cameraOpen, setCameraOpen] = useState(false);
+  const [escalationOpen, setEscalationOpen] = useState(false);
+  const [escalateTo, setEscalateTo] = useState<StaffRole | null>(null);
+  const [escalateReason, setEscalateReason] = useState<string>(ESCALATION_REASONS[0]!);
   const [permission, requestPermission] = useCameraPermissions();
   const cameraRef = useRef<CameraViewType | null>(null);
 
@@ -62,6 +87,17 @@ export default function StaffTaskDetailScreen() {
     }
     setCameraOpen(true);
   }, [permission, requestPermission]);
+
+  const submitEscalation = useCallback(() => {
+    if (!task || !escalateTo) return;
+    escalateTask(task.id, escalateTo, escalateReason, myRole);
+    setEscalationOpen(false);
+    Alert.alert(
+      'Escalated',
+      `Task reassigned to ${roleLabel(escalateTo)}. Priority raised to high.`,
+      [{ text: 'OK', onPress: () => router.back() }],
+    );
+  }, [task, escalateTo, escalateReason, escalateTask, myRole, router]);
 
   const captureAndComplete = useCallback(async () => {
     if (!cameraRef.current || !task) return;
@@ -197,6 +233,18 @@ export default function StaffTaskDetailScreen() {
             />
           </View>
 
+          {task.escalation ? (
+            <View style={styles.escalationBanner}>
+              <Ionicons name="git-branch-outline" size={14} color={Luxe.amberGlow} />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.escalationTitle}>
+                  Escalated · {roleLabel(task.escalation.fromRole).toUpperCase()} → {roleLabel(task.escalation.toRole).toUpperCase()}
+                </Text>
+                <Text style={styles.escalationBody}>{task.escalation.reason}</Text>
+              </View>
+            </View>
+          ) : null}
+
           <View style={styles.section}>
             <Text style={styles.sectionLabel}>Status · {task.status.toUpperCase()}</Text>
             <View style={styles.statusRow}>
@@ -255,15 +303,89 @@ export default function StaffTaskDetailScreen() {
             )
           ) : null}
           {task.status !== 'cancelled' && task.status !== 'completed' ? (
-            <Pressable
-              disabled={submitting}
-              onPress={() => advance('cancelled')}
-              style={styles.secondaryBtn}
-            >
-              <Text style={styles.secondaryBtnText}>Cancel</Text>
-            </Pressable>
+            <>
+              <Pressable
+                disabled={submitting}
+                onPress={() => {
+                  setEscalateTo(null);
+                  setEscalateReason(ESCALATION_REASONS[0]!);
+                  setEscalationOpen(true);
+                }}
+                style={styles.secondaryBtn}
+              >
+                <Ionicons name="git-branch-outline" size={14} color={Luxe.ivoryDim} />
+              </Pressable>
+              <Pressable
+                disabled={submitting}
+                onPress={() => advance('cancelled')}
+                style={styles.secondaryBtn}
+              >
+                <Text style={styles.secondaryBtnText}>Cancel</Text>
+              </Pressable>
+            </>
           ) : null}
         </View>
+
+        <Modal
+          visible={escalationOpen}
+          transparent
+          animationType="slide"
+          onRequestClose={() => setEscalationOpen(false)}
+        >
+          <Pressable style={styles.modalBackdrop} onPress={() => setEscalationOpen(false)}>
+            <Pressable style={styles.modalSheet} onPress={(e) => e.stopPropagation()}>
+              <View style={styles.modalHandle} />
+              <Text style={styles.modalKicker}>Cross-department escalation</Text>
+              <Text style={styles.modalTitle}>Reassign this task</Text>
+
+              <Text style={styles.modalLabel}>Send to</Text>
+              <View style={styles.modalGrid}>
+                {ESCALATION_TARGETS.filter((r) => r !== myRole).map((r) => {
+                  const active = escalateTo === r;
+                  return (
+                    <Pressable
+                      key={r}
+                      onPress={() => setEscalateTo(r)}
+                      style={[styles.modalChip, active && styles.modalChipActive]}
+                    >
+                      <Text style={[styles.modalChipText, active && styles.modalChipTextActive]}>
+                        {roleLabel(r)}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+
+              <Text style={[styles.modalLabel, { marginTop: 18 }]}>Reason</Text>
+              <View style={styles.modalGrid}>
+                {ESCALATION_REASONS.map((r) => {
+                  const active = escalateReason === r;
+                  return (
+                    <Pressable
+                      key={r}
+                      onPress={() => setEscalateReason(r)}
+                      style={[styles.modalChip, active && styles.modalChipActive]}
+                    >
+                      <Text style={[styles.modalChipText, active && styles.modalChipTextActive]}>
+                        {r}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+
+              <Pressable
+                onPress={submitEscalation}
+                disabled={!escalateTo}
+                style={[styles.modalCta, !escalateTo && styles.modalCtaDisabled]}
+              >
+                <Text style={styles.modalCtaText}>
+                  {escalateTo ? `Escalate to ${roleLabel(escalateTo)}` : 'Pick a team to escalate to'}
+                </Text>
+              </Pressable>
+            </Pressable>
+          </Pressable>
+        </Modal>
       </SafeAreaView>
     </View>
   );
@@ -504,6 +626,117 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-around',
     alignItems: 'center',
+  },
+  escalationBanner: {
+    marginTop: 18,
+    padding: 14,
+    borderRadius: 14,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+    backgroundColor: 'rgba(244,201,126,0.10)',
+    borderWidth: 0.5,
+    borderColor: 'rgba(244,201,126,0.30)',
+  },
+  escalationTitle: {
+    fontFamily: LuxeFonts.monoMedium,
+    fontSize: 10,
+    letterSpacing: 1.3,
+    color: Luxe.amberGlow,
+    textTransform: 'uppercase',
+    marginBottom: 4,
+  },
+  escalationBody: {
+    fontFamily: LuxeFonts.sans,
+    fontSize: 12.5,
+    color: Luxe.ivoryDim,
+    lineHeight: 18,
+  },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(8,7,10,0.75)',
+    justifyContent: 'flex-end',
+  },
+  modalSheet: {
+    backgroundColor: '#0C0A08',
+    borderTopLeftRadius: 26,
+    borderTopRightRadius: 26,
+    paddingHorizontal: 24,
+    paddingTop: 12,
+    paddingBottom: 40,
+    borderWidth: 0.5,
+    borderColor: 'rgba(255,240,210,0.10)',
+  },
+  modalHandle: {
+    alignSelf: 'center',
+    width: 44,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: 'rgba(255,240,210,0.18)',
+    marginBottom: 18,
+  },
+  modalKicker: {
+    fontFamily: LuxeFonts.monoMedium,
+    fontSize: 10,
+    letterSpacing: 2.4,
+    color: Luxe.gold,
+    textTransform: 'uppercase',
+    marginBottom: 6,
+  },
+  modalTitle: {
+    fontFamily: LuxeFonts.serif,
+    fontSize: 28,
+    lineHeight: 32,
+    color: Luxe.ivory,
+    letterSpacing: -0.6,
+    marginBottom: 20,
+  },
+  modalLabel: {
+    fontFamily: LuxeFonts.monoMedium,
+    fontSize: 9.5,
+    letterSpacing: 1.6,
+    color: Luxe.muted,
+    textTransform: 'uppercase',
+    marginBottom: 10,
+  },
+  modalGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  modalChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 999,
+    backgroundColor: 'rgba(255,240,210,0.04)',
+    borderWidth: 0.5,
+    borderColor: 'rgba(255,240,210,0.12)',
+  },
+  modalChipActive: {
+    backgroundColor: 'rgba(244,201,126,0.16)',
+    borderColor: 'rgba(244,201,126,0.50)',
+  },
+  modalChipText: {
+    fontFamily: LuxeFonts.mono,
+    fontSize: 11,
+    letterSpacing: 0.4,
+    color: Luxe.ivoryDim,
+  },
+  modalChipTextActive: { color: Luxe.goldBright },
+  modalCta: {
+    marginTop: 24,
+    paddingVertical: 15,
+    borderRadius: 14,
+    backgroundColor: Luxe.goldBright,
+    alignItems: 'center',
+  },
+  modalCtaDisabled: { backgroundColor: 'rgba(244,201,126,0.30)' },
+  modalCtaText: {
+    fontFamily: LuxeFonts.sansSemibold,
+    fontSize: 13,
+    color: '#1A1410',
+    letterSpacing: 1.4,
+    textTransform: 'uppercase',
   },
   cameraCancel: {
     paddingVertical: 10,

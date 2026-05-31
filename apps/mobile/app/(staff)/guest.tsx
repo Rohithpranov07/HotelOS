@@ -5,6 +5,11 @@ import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useStaffStore, type GuestProfileFull } from '../../src/stores/staff.store';
+import {
+  computeRepeatGuestPrompt,
+  computeSentimentScore,
+  computeUpsellFlags,
+} from '../../src/lib/guestIntelligence';
 import { useLuxeFonts } from '../../src/lib/useLuxeFonts';
 import { Luxe, LuxeFonts } from '../../src/theme/luxe';
 
@@ -45,6 +50,10 @@ export default function GuestIntelligenceScreen() {
     );
   }
 
+  const sentiment = computeSentimentScore(profile);
+  const upsells = computeUpsellFlags(profile);
+  const repeat = computeRepeatGuestPrompt(profile);
+
   return (
     <View style={styles.root}>
       <SafeAreaView style={{ flex: 1 }} edges={['top']}>
@@ -64,6 +73,18 @@ export default function GuestIntelligenceScreen() {
             {profile.totalStays} stays · ₹{(profile.lifetimeValue / 100000).toFixed(1)}L lifetime value
           </Text>
 
+          <View style={[styles.repeatBanner, repeat.isRepeat ? styles.repeatBannerLoyal : styles.repeatBannerNew]}>
+            <Ionicons
+              name={repeat.isRepeat ? 'sparkles' : 'add-circle-outline'}
+              size={14}
+              color={repeat.isRepeat ? Luxe.goldBright : Luxe.ivory}
+            />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.repeatBadge}>{repeat.badge.toUpperCase()}</Text>
+              <Text style={styles.repeatMessage}>{repeat.message}</Text>
+            </View>
+          </View>
+
           {/* AI brief */}
           <View style={styles.briefCard}>
             <LinearGradient
@@ -79,6 +100,52 @@ export default function GuestIntelligenceScreen() {
               <Text style={styles.briefText}>{brief}</Text>
             )}
           </View>
+
+          <View style={styles.section}>
+            <Text style={styles.sectionLabel}>Sentiment</Text>
+            <View style={styles.sentimentCard}>
+              <View style={styles.sentimentHead}>
+                <Text style={[styles.sentimentValue, sentimentTint(sentiment.tint)]}>
+                  {sentiment.score}
+                </Text>
+                <Text style={styles.sentimentScale}>/ 100</Text>
+                <View style={{ flex: 1 }} />
+                <Text style={[styles.sentimentLabel, sentimentTint(sentiment.tint)]}>
+                  {sentiment.label.toUpperCase()}
+                </Text>
+              </View>
+              <View style={styles.sentimentTrack}>
+                <View
+                  style={[
+                    styles.sentimentFill,
+                    sentimentBarTint(sentiment.tint),
+                    { width: `${sentiment.score}%` },
+                  ]}
+                />
+              </View>
+              <Text style={styles.sentimentFoot}>
+                {sentiment.sampleSize === 0
+                  ? 'No feedback on file — score is a neutral baseline.'
+                  : `Based on ${sentiment.sampleSize} recent rating${sentiment.sampleSize === 1 ? '' : 's'}.`}
+              </Text>
+            </View>
+          </View>
+
+          {upsells.length > 0 ? (
+            <View style={styles.section}>
+              <Text style={styles.sectionLabel}>Upsell opportunities</Text>
+              {upsells.map((u) => (
+                <View key={u.id} style={styles.upsellCard}>
+                  <View style={styles.upsellHead}>
+                    <View style={[styles.weightDot, weightDotTint(u.weight)]} />
+                    <Text style={styles.upsellTitle}>{u.title}</Text>
+                  </View>
+                  <Text style={styles.upsellBody}>{u.body}</Text>
+                  <Text style={styles.upsellCta}>{u.cta.toUpperCase()} →</Text>
+                </View>
+              ))}
+            </View>
+          ) : null}
 
           {profile.currentStay ? (
             <View style={styles.section}>
@@ -141,6 +208,24 @@ export default function GuestIntelligenceScreen() {
       </SafeAreaView>
     </View>
   );
+}
+
+function sentimentTint(tint: 'positive' | 'neutral' | 'negative') {
+  if (tint === 'positive') return { color: Luxe.goldBright };
+  if (tint === 'negative') return { color: '#E27A6E' };
+  return { color: Luxe.ivoryDim };
+}
+
+function sentimentBarTint(tint: 'positive' | 'neutral' | 'negative') {
+  if (tint === 'positive') return { backgroundColor: Luxe.goldBright };
+  if (tint === 'negative') return { backgroundColor: '#E27A6E' };
+  return { backgroundColor: Luxe.titanium };
+}
+
+function weightDotTint(w: 'high' | 'medium' | 'low') {
+  if (w === 'high') return { backgroundColor: Luxe.goldBright };
+  if (w === 'medium') return { backgroundColor: Luxe.amberGlow };
+  return { backgroundColor: Luxe.titanium };
 }
 
 function Pill({ icon, label }: { icon: keyof typeof Ionicons.glyphMap; label: string }) {
@@ -292,5 +377,99 @@ const styles = StyleSheet.create({
     fontFamily: LuxeFonts.serifItalic,
     fontSize: 14,
     color: Luxe.ivoryDim,
+  },
+  repeatBanner: {
+    marginTop: 18,
+    padding: 14,
+    borderRadius: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    borderWidth: 0.5,
+  },
+  repeatBannerLoyal: {
+    backgroundColor: 'rgba(244,201,126,0.08)',
+    borderColor: 'rgba(244,201,126,0.30)',
+  },
+  repeatBannerNew: {
+    backgroundColor: 'rgba(255,240,210,0.04)',
+    borderColor: 'rgba(255,240,210,0.12)',
+  },
+  repeatBadge: {
+    fontFamily: LuxeFonts.monoMedium,
+    fontSize: 9.5,
+    letterSpacing: 1.6,
+    color: Luxe.goldBright,
+    marginBottom: 4,
+  },
+  repeatMessage: {
+    fontFamily: LuxeFonts.sans,
+    fontSize: 12.5,
+    color: Luxe.ivoryDim,
+    lineHeight: 18,
+  },
+  sentimentCard: {
+    padding: 18,
+    borderRadius: 18,
+    backgroundColor: '#0C0A08',
+    borderWidth: 0.5,
+    borderColor: Luxe.hairlineStrong,
+  },
+  sentimentHead: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: 6,
+    marginBottom: 14,
+  },
+  sentimentValue: { fontFamily: LuxeFonts.serif, fontSize: 36, letterSpacing: -1 },
+  sentimentScale: { fontFamily: LuxeFonts.mono, fontSize: 12, color: Luxe.muted },
+  sentimentLabel: {
+    fontFamily: LuxeFonts.monoMedium,
+    fontSize: 10,
+    letterSpacing: 1.4,
+  },
+  sentimentTrack: {
+    height: 6,
+    borderRadius: 999,
+    backgroundColor: 'rgba(255,240,210,0.06)',
+    overflow: 'hidden',
+  },
+  sentimentFill: { height: '100%', borderRadius: 999 },
+  sentimentFoot: {
+    marginTop: 10,
+    fontFamily: LuxeFonts.mono,
+    fontSize: 10.5,
+    color: Luxe.titanium,
+    letterSpacing: 0.4,
+  },
+  upsellCard: {
+    padding: 16,
+    borderRadius: 16,
+    backgroundColor: '#0C0A08',
+    borderWidth: 0.5,
+    borderColor: Luxe.hairlineStrong,
+    marginBottom: 10,
+  },
+  upsellHead: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 },
+  weightDot: { width: 8, height: 8, borderRadius: 4 },
+  upsellTitle: {
+    flex: 1,
+    fontFamily: LuxeFonts.sansMedium,
+    fontSize: 13.5,
+    color: Luxe.ivory,
+    letterSpacing: 0.2,
+  },
+  upsellBody: {
+    fontFamily: LuxeFonts.sans,
+    fontSize: 12.5,
+    color: Luxe.ivoryDim,
+    lineHeight: 18,
+  },
+  upsellCta: {
+    marginTop: 10,
+    fontFamily: LuxeFonts.monoMedium,
+    fontSize: 10,
+    letterSpacing: 1.4,
+    color: Luxe.goldBright,
   },
 });

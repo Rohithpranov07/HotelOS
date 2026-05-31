@@ -3,6 +3,7 @@ import cors from '@fastify/cors';
 import helmet from '@fastify/helmet';
 import { config } from './config.js';
 import { reservationRoutes } from './routes/reservation.routes.js';
+import { contentRoutes } from './routes/content.routes.js';
 import { webhookRoutes } from './routes/webhook.routes.js';
 import { schedulePmsSync } from './workers/pms-sync.worker.js';
 
@@ -32,6 +33,7 @@ export async function buildApp() {
   }));
 
   await app.register(reservationRoutes, { prefix: '/api/v1/reservations' });
+  await app.register(contentRoutes, { prefix: '/api/v1/content' });
   await app.register(webhookRoutes, { prefix: '/webhooks' });
 
   return app;

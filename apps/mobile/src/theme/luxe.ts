@@ -1,4 +1,4 @@
-// Hôtel Octave design tokens — luxury dark editorial theme.
+// Hotel Kodai International design tokens — luxury dark editorial theme.
 // Mirrors HotelOS.html design package (claude.ai/design export).
 
 export const Luxe = {

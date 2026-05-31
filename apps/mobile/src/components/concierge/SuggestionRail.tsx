@@ -1,4 +1,5 @@
 import { Pressable, ScrollView, StyleSheet, Text } from 'react-native';
+import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Luxe, LuxeFonts } from '../../theme/luxe';
 
@@ -8,6 +9,7 @@ export interface SuggestionItem {
   kicker: string;
   title: string;
   tone?: SuggestionTone;
+  backgroundImage?: number;
 }
 
 interface SuggestionRailProps {
@@ -37,19 +39,47 @@ export function SuggestionRail({ items, onPick }: SuggestionRailProps) {
         const colors = PALETTE[tone];
         return (
           <Pressable key={`${it.title}-${i}`} onPress={() => onPick(it)} style={styles.card}>
-            <LinearGradient
-              colors={[colors[0], 'transparent']}
-              locations={[0, 0.7]}
-              start={{ x: 0.8, y: 0.2 }}
-              end={{ x: 0, y: 1 }}
-              style={StyleSheet.absoluteFill}
-            />
-            <LinearGradient
-              colors={[colors[1], colors[2]]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 0, y: 1 }}
-              style={[StyleSheet.absoluteFill, { zIndex: -1 }]}
-            />
+            {it.backgroundImage ? (
+              <>
+                <Image
+                  source={it.backgroundImage}
+                  style={StyleSheet.absoluteFill}
+                  contentFit="cover"
+                  cachePolicy="memory-disk"
+                  priority="high"
+                  transition={180}
+                  recyclingKey={`sugg-${it.title}`}
+                />
+                <LinearGradient
+                  colors={['rgba(6,5,3,0.20)', 'rgba(6,5,3,0.55)', 'rgba(4,3,1,0.92)']}
+                  locations={[0, 0.45, 1]}
+                  style={StyleSheet.absoluteFill}
+                />
+                <LinearGradient
+                  colors={[colors[0], 'transparent']}
+                  locations={[0, 0.7]}
+                  start={{ x: 0.8, y: 0.2 }}
+                  end={{ x: 0, y: 1 }}
+                  style={StyleSheet.absoluteFill}
+                />
+              </>
+            ) : (
+              <>
+                <LinearGradient
+                  colors={[colors[0], 'transparent']}
+                  locations={[0, 0.7]}
+                  start={{ x: 0.8, y: 0.2 }}
+                  end={{ x: 0, y: 1 }}
+                  style={StyleSheet.absoluteFill}
+                />
+                <LinearGradient
+                  colors={[colors[1], colors[2]]}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 0, y: 1 }}
+                  style={[StyleSheet.absoluteFill, { zIndex: -1 }]}
+                />
+              </>
+            )}
             <Text style={styles.kicker}>{it.kicker}</Text>
             <Text style={styles.title} numberOfLines={2}>
               {it.title}

@@ -34,12 +34,14 @@ function ActionTile({ action }: { action: LuxeAction }) {
       onPress={action.onPress}
       onPressIn={() => setPressed(true)}
       onPressOut={() => setPressed(false)}
+      unstable_pressDelay={130}
       style={[styles.tile, { transform: [{ scale: pressed ? 0.965 : 1 }] }]}
     >
       <LinearGradient
         colors={[Luxe.surfaceTop, '#0D0B08']}
         style={StyleSheet.absoluteFill}
       />
+      <View style={styles.tileTopHairline} />
       <ActionVisual kind={action.kind} />
       {action.badge ? (
         <View style={styles.badge}>
@@ -159,7 +161,16 @@ const styles = StyleSheet.create({
     borderRadius: 26,
     overflow: 'hidden',
     borderWidth: 0.5,
-    borderColor: Luxe.hairline,
+    borderColor: 'rgba(255,240,210,0.10)',
+  },
+  tileTopHairline: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 1,
+    backgroundColor: 'rgba(244,201,126,0.36)',
+    zIndex: 2,
   },
   badge: {
     position: 'absolute',
@@ -190,7 +201,7 @@ const styles = StyleSheet.create({
   tileSub: {
     fontFamily: LuxeFonts.monoMedium,
     fontSize: 9.5,
-    color: Luxe.muted,
+    color: Luxe.titanium,
     letterSpacing: 1.2,
     textTransform: 'uppercase',
     marginTop: 4,

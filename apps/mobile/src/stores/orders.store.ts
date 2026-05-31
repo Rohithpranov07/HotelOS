@@ -1,5 +1,10 @@
 import { create } from 'zustand';
 import { ordersApi } from '../lib/api';
+import {
+  bridgeGuestOrderToStaff,
+  bridgeStatusToStaff,
+  bridgeNegativeFeedback,
+} from '../lib/orderBridge';
 
 export interface MenuItem {
   id: string;
@@ -29,6 +34,7 @@ export interface CartItem {
   quantity: number;
   unitPrice: number;
   notes: string;
+  imageUrl?: string | null;
 }
 
 export type OrderStatus =
@@ -145,6 +151,17 @@ interface OrdersState {
   enqueueFeedback: (order: Order) => void;
   dismissFeedback: (orderId: string) => void;
   submitServiceFeedback: (input: ServiceFeedbackInput) => Promise<ServiceFeedbackResult>;
+
+  // Bridge: staff side moved the task forward — apply locally without echoing.
+  applyBridgeStatus: (orderId: string, status: OrderStatus) => void;
+}
+
+function tryBridge(fn: () => void): void {
+  try {
+    fn();
+  } catch {
+    // bridge is best-effort; never let a cross-store call break the primary flow
+  }
 }
 
 const STAFF_POOL = [
@@ -280,6 +297,7 @@ export const useOrdersStore = create<OrdersState>((set, get) => ({
         cart: [],
         activeOrders: [data, ...get().activeOrders],
       });
+      tryBridge(() => bridgeGuestOrderToStaff(data));
       get().simulateOrderProgress(data.id);
       return data;
     } catch (err) {
@@ -297,6 +315,7 @@ export const useOrdersStore = create<OrdersState>((set, get) => ({
         cart: [],
         activeOrders: [fake, ...get().activeOrders],
       });
+      tryBridge(() => bridgeGuestOrderToStaff(fake));
       get().simulateOrderProgress(fake.id);
       return fake;
     }
@@ -323,6 +342,7 @@ export const useOrdersStore = create<OrdersState>((set, get) => ({
         ...(opts?.scheduledFor ? { scheduled_for: opts.scheduledFor } : {}),
       });
       set({ placing: false, activeOrders: [data, ...get().activeOrders] });
+      tryBridge(() => bridgeGuestOrderToStaff(data));
       get().simulateOrderProgress(data.id);
       return data;
     } catch (err) {
@@ -338,6 +358,7 @@ export const useOrdersStore = create<OrdersState>((set, get) => ({
         scheduledFor: opts?.scheduledFor ?? null,
       });
       set({ placing: false, activeOrders: [fake, ...get().activeOrders] });
+      tryBridge(() => bridgeGuestOrderToStaff(fake));
       get().simulateOrderProgress(fake.id);
       return fake;
     }
@@ -404,6 +425,7 @@ export const useOrdersStore = create<OrdersState>((set, get) => ({
     const idx = active.findIndex((o) => o.id === orderId);
     if (idx === -1) return;
     const next: OrderStatus = status as OrderStatus;
+    if (active[idx]!.status === next) return;
     const updated: Order = { ...active[idx]!, status: next };
     if (next === 'completed' || next === 'cancelled') {
       set({
@@ -412,6 +434,29 @@ export const useOrdersStore = create<OrdersState>((set, get) => ({
       });
       // A finished service the guest hasn't rated → queue the emotion prompt.
       if (next === 'completed' && !updated.guest_mood) {
+        get().enqueueFeedback(updated);
+      }
+    } else {
+      const copy = [...active];
+      copy[idx] = updated;
+      set({ activeOrders: copy });
+    }
+    // Bridge: keep the staff queue in sync with guest-side progression.
+    tryBridge(() => bridgeStatusToStaff(orderId, next));
+  },
+
+  applyBridgeStatus: (orderId, status) => {
+    const active = get().activeOrders;
+    const idx = active.findIndex((o) => o.id === orderId);
+    if (idx === -1) return;
+    if (active[idx]!.status === status) return;
+    const updated: Order = { ...active[idx]!, status };
+    if (status === 'completed' || status === 'cancelled') {
+      set({
+        activeOrders: active.filter((o) => o.id !== orderId),
+        orderHistory: [updated, ...get().orderHistory],
+      });
+      if (status === 'completed' && !updated.guest_mood) {
         get().enqueueFeedback(updated);
       }
     } else {
@@ -484,6 +529,18 @@ export const useOrdersStore = create<OrdersState>((set, get) => ({
     } catch {
       // Backend not reachable — the optimistic local update already stands so
       // the demo flow completes; the derived result is returned regardless.
+    }
+    if (result.sentiment === 'negative') {
+      const order =
+        get().orderHistory.find((o) => o.id === input.orderId) ??
+        get().activeOrders.find((o) => o.id === input.orderId);
+      tryBridge(() =>
+        bridgeNegativeFeedback({
+          reservationId: order?.reservation_id ?? input.orderId,
+          overallScore: input.mood,
+          comment: note,
+        }),
+      );
     }
     return result;
   },

@@ -8,7 +8,10 @@ export type ServiceOrderType =
   | 'housekeeping'
   | 'maintenance'
   | 'amenity'
-  | 'beverage';
+  | 'beverage'
+  | 'transfer'
+  | 'medical'
+  | 'experience';
 
 export type ServiceTone = 'amber' | 'bronze' | 'ink' | 'ivory';
 
@@ -93,13 +96,13 @@ export const SERVICE_CATEGORIES: ServiceCategory[] = [
     items: [
       {
         id: 'svc-maint-climate',
-        name: 'Climate & air conditioning',
-        short: 'Climate control',
-        desc: 'Temperature, airflow or thermostat not behaving.',
+        name: 'Heater & climate',
+        short: 'Heater',
+        desc: 'Room heater, geyser or thermostat not behaving.',
         price: 0,
         etaMinutes: 20,
         type: 'maintenance',
-        icon: 'snow-outline',
+        icon: 'thermometer-outline',
       },
       {
         id: 'svc-maint-lighting',
@@ -156,6 +159,16 @@ export const SERVICE_CATEGORIES: ServiceCategory[] = [
         etaMinutes: 40,
         type: 'amenity',
         icon: 'hand-left-outline',
+      },
+      {
+        id: 'svc-well-sauna',
+        name: 'Steam & sauna',
+        short: 'Sauna',
+        desc: 'Reserve a slot at the spa — steam, sauna and a cold plunge.',
+        price: 2200,
+        etaMinutes: 30,
+        type: 'amenity',
+        icon: 'water-outline',
       },
       {
         id: 'svc-well-yoga',
@@ -233,13 +246,24 @@ export const SERVICE_CATEGORIES: ServiceCategory[] = [
         icon: 'wine-outline',
       },
       {
-        id: 'svc-amen-minibar',
-        name: 'Mini-bar restock',
-        desc: 'Replenish the in-suite bar to full.',
+        id: 'svc-amen-hotbev',
+        name: 'Hot tea or coffee',
+        short: 'Tea / coffee',
+        desc: 'Filter coffee, masala chai or cardamom tea — sent up warm.',
         price: 0,
-        etaMinutes: 30,
+        etaMinutes: 15,
         type: 'amenity',
-        icon: 'beer-outline',
+        icon: 'cafe-outline',
+      },
+      {
+        id: 'svc-amen-blanket',
+        name: 'Extra heater & blanket',
+        short: 'Heater',
+        desc: 'A second blanket and the room heater turned up.',
+        price: 0,
+        etaMinutes: 15,
+        type: 'amenity',
+        icon: 'flame-outline',
       },
     ],
   },
@@ -290,16 +314,145 @@ export const SERVICE_CATEGORIES: ServiceCategory[] = [
       },
     ],
   },
+  {
+    key: 'transfers',
+    kicker: 'Transfers',
+    title: 'Transfers & Shuttle',
+    tagline: 'A car at the porch, whenever you need to move.',
+    icon: 'car-outline',
+    tone: 'ink',
+    items: [
+      {
+        id: 'svc-transfer-airport',
+        name: 'Madurai airport transfer',
+        short: 'Airport car',
+        desc: 'Private sedan to MAA airport — approx. 3h via Dindigul.',
+        price: 4500,
+        etaMinutes: 30,
+        type: 'transfer',
+        icon: 'airplane-outline',
+      },
+      {
+        id: 'svc-transfer-shuttle',
+        name: 'In-town shuttle',
+        short: 'Shuttle',
+        desc: 'Drop to the lake, Coaker’s Walk or Bryant Park.',
+        price: 0,
+        etaMinutes: 15,
+        type: 'transfer',
+        icon: 'bus-outline',
+      },
+      {
+        id: 'svc-transfer-sightseeing',
+        name: 'Sightseeing cab',
+        short: 'Sightseeing',
+        desc: 'Half-day chauffeured loop — Pillar Rocks, Berijam, viewpoints.',
+        price: 3200,
+        etaMinutes: 30,
+        type: 'transfer',
+        icon: 'navigate-outline',
+      },
+    ],
+  },
+  {
+    key: 'medical',
+    kicker: 'On call',
+    title: 'Doctor & Medical',
+    tagline: 'Our in-house medical centre is on premise, day and night.',
+    icon: 'medkit-outline',
+    tone: 'ivory',
+    items: [
+      {
+        id: 'svc-med-doctor',
+        name: 'Doctor on call',
+        short: 'Doctor',
+        desc: 'A physician visits your suite within 30 minutes.',
+        price: 1500,
+        etaMinutes: 30,
+        type: 'medical',
+        icon: 'medkit-outline',
+      },
+      {
+        id: 'svc-med-firstaid',
+        name: 'First-aid kit',
+        desc: 'Basic supplies — bandages, antiseptic, paracetamol.',
+        price: 0,
+        etaMinutes: 15,
+        type: 'medical',
+        icon: 'bandage-outline',
+      },
+      {
+        id: 'svc-med-oxygen',
+        name: 'Altitude support',
+        short: 'Altitude',
+        desc: 'Light oxygen and a check-in for high-altitude discomfort.',
+        price: 0,
+        etaMinutes: 20,
+        type: 'medical',
+        icon: 'pulse-outline',
+      },
+    ],
+  },
+  {
+    key: 'experiences',
+    kicker: 'On the grounds',
+    title: 'Bonfire, Golf & Activities',
+    tagline: 'The hills, the garden, the long evening — arranged for you.',
+    icon: 'flame-outline',
+    tone: 'amber',
+    items: [
+      {
+        id: 'svc-exp-bonfire',
+        name: 'Bonfire for the evening',
+        short: 'Bonfire',
+        desc: 'A private fire lit in the garden — wood, blankets and warm tea.',
+        price: 2500,
+        etaMinutes: 60,
+        type: 'experience',
+        icon: 'flame-outline',
+      },
+      {
+        id: 'svc-exp-golf',
+        name: 'Mini golf reservation',
+        short: 'Mini golf',
+        desc: 'A round on the course — clubs and balls provided.',
+        price: 800,
+        etaMinutes: 20,
+        type: 'experience',
+        icon: 'golf-outline',
+      },
+      {
+        id: 'svc-exp-indoor',
+        name: 'Indoor games access',
+        short: 'Indoor games',
+        desc: 'Carrom, table tennis, chess and board games in the lounge.',
+        price: 0,
+        etaMinutes: 10,
+        type: 'experience',
+        icon: 'game-controller-outline',
+      },
+      {
+        id: 'svc-exp-garden',
+        name: 'Garden tour',
+        short: 'Garden walk',
+        desc: 'A guided amble through the property gardens at golden hour.',
+        price: 0,
+        etaMinutes: 30,
+        type: 'experience',
+        icon: 'leaf-outline',
+      },
+    ],
+  },
 ];
 
 // A curated set surfaced in the "Most summoned" rail at the top of the screen.
 export const QUICK_SUMMON_IDS = [
-  'svc-amen-water',
-  'svc-house-towels',
-  'svc-maint-climate',
-  'svc-well-massage',
-  'svc-laundry-press',
-  'svc-amen-charger',
+  'svc-exp-bonfire',
+  'svc-amen-hotbev',
+  'svc-amen-blanket',
+  'svc-well-sauna',
+  'svc-transfer-shuttle',
+  'svc-med-doctor',
 ] as const;
 
 export const ALL_SERVICES: ServiceItem[] = SERVICE_CATEGORIES.flatMap((c) => c.items);

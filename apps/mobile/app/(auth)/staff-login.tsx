@@ -38,7 +38,7 @@ export default function StaffLoginScreen() {
     }
     try {
       await staffLogin(email.trim(), password, needsTotp ? totp.trim() : undefined);
-      router.replace('/(staff)/tasks');
+      router.replace('/(staff)/home');
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Login failed';
       if (/TOTP|2FA|code/i.test(msg)) {
@@ -123,6 +123,16 @@ export default function StaffLoginScreen() {
                   <Text style={styles.ctaText}>Sign in</Text>
                 )}
               </Pressable>
+
+              <View style={styles.demoHint}>
+                <Text style={styles.demoHintLabel}>Demo bypass</Text>
+                <Text style={styles.demoHintBody}>
+                  manager@demo.com · demo1234
+                </Text>
+                <Text style={styles.demoHintFoot}>
+                  Any @demo.com email works — prefix sets role (housekeeping@demo.com, frontdesk@demo.com).
+                </Text>
+              </View>
 
               <Pressable onPress={() => router.replace('/(auth)/phone')} style={styles.altLink}>
                 <Text style={styles.altLinkText}>I'm a guest — phone OTP</Text>
@@ -220,6 +230,35 @@ const styles = StyleSheet.create({
     color: '#1A1410',
     letterSpacing: 1.4,
     textTransform: 'uppercase',
+  },
+  demoHint: {
+    marginTop: 22,
+    padding: 14,
+    borderRadius: 12,
+    backgroundColor: 'rgba(244,201,126,0.06)',
+    borderWidth: 0.5,
+    borderColor: 'rgba(244,201,126,0.22)',
+  },
+  demoHintLabel: {
+    fontFamily: LuxeFonts.monoMedium,
+    fontSize: 9.5,
+    letterSpacing: 1.8,
+    color: Luxe.gold,
+    textTransform: 'uppercase',
+    marginBottom: 6,
+  },
+  demoHintBody: {
+    fontFamily: LuxeFonts.mono,
+    fontSize: 13,
+    color: Luxe.ivory,
+    letterSpacing: 0.4,
+  },
+  demoHintFoot: {
+    marginTop: 6,
+    fontFamily: LuxeFonts.sansLight,
+    fontSize: 11.5,
+    color: Luxe.ivoryDim,
+    lineHeight: 16,
   },
   altLink: { marginTop: 20, alignSelf: 'center' },
   altLinkText: {

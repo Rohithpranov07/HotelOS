@@ -8,13 +8,16 @@ import { TaskCard } from '../../src/components/staff/TaskCard';
 import { useLuxeFonts } from '../../src/lib/useLuxeFonts';
 import { Luxe, LuxeFonts } from '../../src/theme/luxe';
 import { subscribeStaffTasks } from '../../src/lib/socket';
+import { allowedTaskTypes, canSeeAllTasks, roleLabel } from '../../src/lib/staffRoles';
 
-const FILTERS: Array<{ key: 'all' | TaskType; label: string }> = [
-  { key: 'all', label: 'All' },
-  { key: 'food', label: 'Food' },
-  { key: 'housekeeping', label: 'Housekeeping' },
-  { key: 'laundry', label: 'Laundry' },
-];
+const TYPE_LABEL: Record<TaskType, string> = {
+  food: 'Food',
+  beverage: 'Beverage',
+  housekeeping: 'Housekeeping',
+  laundry: 'Laundry',
+  maintenance: 'Maintenance',
+  concierge: 'Concierge',
+};
 
 export default function StaffTasksScreen() {
   useLuxeFonts();
@@ -54,8 +57,16 @@ export default function StaffTasksScreen() {
     return unsub;
   }, [staffUser?.propertyId, applyTaskEvent]);
 
+  const allowed = useMemo(() => allowedTaskTypes(staffUser?.role), [staffUser?.role]);
+  const allowedSet = useMemo(() => new Set<TaskType>(allowed), [allowed]);
+  const filters = useMemo<Array<{ key: 'all' | TaskType; label: string }>>(
+    () => [{ key: 'all', label: 'All' }, ...allowed.map((t) => ({ key: t, label: TYPE_LABEL[t] }))],
+    [allowed],
+  );
+
   const filtered = useMemo(() => {
     let out = tasks.filter((t) => t.status !== 'completed' && t.status !== 'cancelled');
+    out = out.filter((t) => allowedSet.has(t.type));
     if (filter.type && filter.type !== 'all') out = out.filter((t) => t.type === filter.type);
     if (filter.mine) out = out.filter((t) => t.assignedToMe);
     return out.sort((a, b) => {
@@ -63,9 +74,16 @@ export default function StaffTasksScreen() {
       const bT = b.slaDeadline ? new Date(b.slaDeadline).getTime() : Infinity;
       return aT - bT;
     });
-  }, [tasks, filter]);
+  }, [tasks, filter, allowedSet]);
+
+  useEffect(() => {
+    if (filter.type && filter.type !== 'all' && !allowedSet.has(filter.type)) {
+      setFilter({ type: 'all' });
+    }
+  }, [filter.type, allowedSet, setFilter]);
 
   const pendingCount = filtered.filter((t) => t.status === 'pending').length;
+  const showAllPill = canSeeAllTasks(staffUser?.role);
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -82,7 +100,7 @@ export default function StaffTasksScreen() {
             {pendingCount > 0 ? `${pendingCount} pending` : 'All clear'}
           </Text>
           <Text style={styles.subhead}>
-            {staffUser?.fullName ?? 'Staff'} · {staffUser?.role?.toUpperCase() ?? 'TEAM'}
+            {staffUser?.fullName ?? 'Staff'} · {roleLabel(staffUser?.role).toUpperCase()}
           </Text>
         </View>
 
@@ -92,11 +110,11 @@ export default function StaffTasksScreen() {
             style={[styles.filterPill, filter.mine && styles.filterPillActive]}
           >
             <Text style={[styles.filterText, filter.mine && styles.filterTextActive]}>
-              {filter.mine ? 'Mine' : 'All staff'}
+              {filter.mine ? 'Mine' : showAllPill ? 'All staff' : 'All team'}
             </Text>
           </Pressable>
           <View style={styles.filterDivider} />
-          {FILTERS.map((f) => {
+          {filters.map((f) => {
             const active = (filter.type ?? 'all') === f.key;
             return (
               <Pressable

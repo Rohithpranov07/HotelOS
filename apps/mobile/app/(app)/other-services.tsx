@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   Dimensions,
   Linking,
+  Modal,
   Platform,
   Pressable,
   ScrollView,
@@ -9,10 +10,20 @@ import {
   Text,
   View,
 } from 'react-native';
+import { Image as ExpoImage } from 'expo-image';
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withSpring,
+} from 'react-native-reanimated';
+
+const AnimatedExpoImage = Animated.createAnimatedComponent(ExpoImage);
+import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
+import * as Haptics from 'expo-haptics';
 import Svg, {
   Circle,
   Defs,
@@ -25,6 +36,16 @@ import Svg, {
 } from 'react-native-svg';
 import { useLuxeFonts } from '../../src/lib/useLuxeFonts';
 import { Luxe, LuxeFonts, LuxeRadii } from '../../src/theme/luxe';
+import { useWeather } from '../../src/lib/useWeather';
+import { useContentStore, type Attraction } from '../../src/stores/content.store';
+import {
+  HOTEL_COORDS,
+  estimateDriveMinutes,
+  formatDuration,
+  formatKm,
+  haversineKm,
+} from '../../src/lib/geo';
+import { usePlanStore } from '../../src/stores/plan.store';
 
 const { width: SW } = Dimensions.get('window');
 type IconName = keyof typeof Ionicons.glyphMap;
@@ -43,14 +64,16 @@ interface Spot {
   name: string;
   subtitle: string;
   whyVisit: string;
-  eta: string;
-  distance: string;
+  /** Real coordinates — distance & ETA are derived from these and the hotel. */
+  lat: number;
+  lng: number;
   rating: string;
   ratingCount: string;
   gradA: string;
   gradB: string;
   gradC: string;
   icon: IconName;
+  backgroundImage?: number;
 }
 
 interface Transport {
@@ -84,6 +107,7 @@ interface Experience {
   tag: string;
   gradA: string;
   gradB: string;
+  backgroundImage?: number;
 }
 
 const CATEGORIES: Category[] = [
@@ -98,70 +122,141 @@ const CATEGORIES: Category[] = [
   { id: 'family', label: 'Family Spots', icon: 'people-outline' },
 ];
 
-const SPOTS: Spot[] = [
+const FALLBACK_SPOTS: Spot[] = [
   {
-    id: 'marina',
-    categories: ['nature', 'attractions'],
-    name: 'Marina Beach',
-    subtitle: 'The longest natural urban beach in India.',
+    id: 'lake',
+    categories: ['nature', 'attractions', 'family'],
+    name: 'Kodaikanal Lake',
+    subtitle: 'The star-shaped lake at the heart of the town.',
     whyVisit:
-      'Walk 6 km of golden seafront. Best at sunrise — the light on the water is extraordinary.',
-    eta: '12 min',
-    distance: '4.2 km',
-    rating: '4.7',
-    ratingCount: '12.4k',
-    gradA: '#0A1E2E',
-    gradB: '#163652',
-    gradC: 'rgba(30,90,140,0.65)',
+      'A 5 km shoreline made for slow walks, paddle boats and rented cycles. Quiet at dawn, lively by mid-morning.',
+    lat: 10.2378,
+    lng: 77.4848,
+    rating: '4.6',
+    ratingCount: '38.2k',
+    gradA: '#0A1E22',
+    gradB: '#143038',
+    gradC: 'rgba(40,120,130,0.60)',
     icon: 'water-outline',
+    backgroundImage: require('../../assets/lake.jpg'),
   },
   {
-    id: 'kapaleeshwarar',
-    categories: ['culture', 'attractions'],
-    name: 'Kapaleeshwarar Temple',
-    subtitle: 'Dravidian architecture and living tradition.',
+    id: 'coakers',
+    categories: ['nature', 'attractions'],
+    name: "Coaker's Walk",
+    subtitle: 'A 1 km promenade along the cliff edge.',
     whyVisit:
-      'A 7th-century Shiva temple of extraordinary beauty. Visit at dusk when the air fills with incense and chanting.',
-    eta: '18 min',
-    distance: '5.8 km',
-    rating: '4.8',
-    ratingCount: '8.9k',
+      "On clear days the valley opens all the way to Dolphin's Nose. Best at sunrise or just before sundown.",
+    lat: 10.2335,
+    lng: 77.4937,
+    rating: '4.5',
+    ratingCount: '18.7k',
+    gradA: '#0E1A0E',
+    gradB: '#1A2C1A',
+    gradC: 'rgba(80,140,90,0.55)',
+    icon: 'walk-outline',
+    backgroundImage: require('../../assets/Coakers.jpg'),
+  },
+  {
+    id: 'bryant',
+    categories: ['nature', 'culture', 'family'],
+    name: 'Bryant Park',
+    subtitle: 'A 20-acre botanical garden by the lake.',
+    whyVisit:
+      'Hybrid roses, conifers and the annual May flower show. A peaceful afternoon stroll.',
+    lat: 10.2363,
+    lng: 77.4922,
+    rating: '4.3',
+    ratingCount: '12.4k',
+    gradA: '#101A08',
+    gradB: '#1C2C10',
+    gradC: 'rgba(110,150,60,0.55)',
+    icon: 'leaf-outline',
+    backgroundImage: require('../../assets/Bryantpark.jpg'),
+  },
+  {
+    id: 'pillar',
+    categories: ['nature', 'attractions'],
+    name: 'Pillar Rocks',
+    subtitle: 'Three vertical granite shafts, 122 m tall.',
+    whyVisit:
+      'A dramatic viewpoint 8 km out of town. Often wreathed in mist — wait a minute, the curtain lifts.',
+    lat: 10.2271,
+    lng: 77.4528,
+    rating: '4.4',
+    ratingCount: '21.3k',
+    gradA: '#15141A',
+    gradB: '#23202C',
+    gradC: 'rgba(120,110,150,0.45)',
+    icon: 'triangle-outline',
+    backgroundImage: require('../../assets/pillarrocks.jpg'),
+  },
+  {
+    id: 'berijam',
+    categories: ['nature', 'hidden'],
+    name: 'Berijam Lake',
+    subtitle: 'A protected forest lake, deeper into the shola.',
+    whyVisit:
+      'Permit required from the forest office. The drive winds through pristine shola jungle — bison and gaur are common sightings.',
+    lat: 10.1843,
+    lng: 77.3888,
+    rating: '4.7',
+    ratingCount: '7.8k',
+    gradA: '#08160E',
+    gradB: '#0E2418',
+    gradC: 'rgba(40,110,70,0.55)',
+    icon: 'trail-sign-outline',
+    backgroundImage: require('../../assets/Berijam.jpg'),
+  },
+  {
+    id: 'silver',
+    categories: ['nature', 'hidden'],
+    name: 'Silver Cascade',
+    subtitle: 'A 55 m roadside waterfall on the ghat road.',
+    whyVisit:
+      'The first glimpse most visitors get of Kodai. Stop on the way in or out — best after the monsoon.',
+    lat: 10.2630,
+    lng: 77.5181,
+    rating: '4.2',
+    ratingCount: '15.6k',
+    gradA: '#0A1620',
+    gradB: '#14283A',
+    gradC: 'rgba(70,130,180,0.50)',
+    icon: 'rainy-outline',
+    backgroundImage: require('../../assets/Silvercascade.jpg'),
+  },
+  {
+    id: 'kurinji',
+    categories: ['culture', 'attractions'],
+    name: 'Kurinji Andavar Temple',
+    subtitle: 'A hilltop Murugan temple, est. 1936.',
+    whyVisit:
+      'Named for the kurinji flower that blooms once every 12 years. Sweeping views over Palani and Vaigai dam.',
+    lat: 10.2475,
+    lng: 77.5081,
+    rating: '4.5',
+    ratingCount: '9.2k',
     gradA: '#1E1005',
     gradB: '#3C2008',
-    gradC: 'rgba(160,80,20,0.60)',
+    gradC: 'rgba(180,110,40,0.55)',
     icon: 'business-outline',
+    backgroundImage: require('../../assets/Kuruji.jpg'),
   },
   {
-    id: 'phoenix',
-    categories: ['shopping'],
-    name: 'Phoenix MarketCity',
-    subtitle: 'Premium retail and curated dining.',
+    id: 'bazaar',
+    categories: ['shopping', 'culture'],
+    name: 'Tibetan & Coronation Bazaar',
+    subtitle: 'Hill-station markets for woollens and chocolate.',
     whyVisit:
-      "Luxury brands, artisan food courts and rooftop dining — Chennai's finest under one roof.",
-    eta: '9 min',
-    distance: '3.1 km',
-    rating: '4.5',
-    ratingCount: '22.1k',
+      'Hand-knit shawls, jackets and pashminas at the Tibetan stalls; homemade chocolate, cheese and eucalyptus oil on Bazaar Road.',
+    lat: 10.2389,
+    lng: 77.4865,
+    rating: '4.2',
+    ratingCount: '6.4k',
     gradA: '#0E0C16',
     gradB: '#161224',
-    gradC: 'rgba(80,60,140,0.50)',
+    gradC: 'rgba(120,80,160,0.50)',
     icon: 'bag-handle-outline',
-  },
-  {
-    id: 'mahabalipuram',
-    categories: ['culture', 'hidden'],
-    name: 'Mahabalipuram',
-    subtitle: 'UNESCO World Heritage shore temples.',
-    whyVisit:
-      'Rock-cut Pallava dynasty temples set against the Bay of Bengal. Truly unmissable.',
-    eta: '1 hr 10 min',
-    distance: '58 km',
-    rating: '4.9',
-    ratingCount: '31.2k',
-    gradA: '#141008',
-    gradB: '#281E0C',
-    gradC: 'rgba(160,120,40,0.55)',
-    icon: 'trail-sign-outline',
   },
 ];
 
@@ -169,9 +264,9 @@ const TRANSPORT: Transport[] = [
   {
     id: 'cab',
     icon: 'car-outline',
-    label: 'Book a Cab',
-    sub: 'Arrives in ~4 min',
-    fare: '₹120–180',
+    label: 'In-town cab',
+    sub: 'Arrives in ~6 min',
+    fare: '₹150–250',
     gradFrom: 'rgba(244,201,126,0.16)',
     gradTo: 'rgba(139,111,71,0.03)',
     borderColor: 'rgba(244,201,126,0.28)',
@@ -179,9 +274,9 @@ const TRANSPORT: Transport[] = [
   {
     id: 'chauffeur',
     icon: 'car-sport-outline',
-    label: 'Luxury Chauffeur',
-    sub: 'Mercedes E-Class',
-    fare: '₹1,200 / hr',
+    label: 'Sightseeing chauffeur',
+    sub: 'Innova or Crysta — full day',
+    fare: '₹3,800 / day',
     gradFrom: 'rgba(139,111,71,0.22)',
     gradTo: 'rgba(244,201,126,0.04)',
     borderColor: 'rgba(212,168,87,0.28)',
@@ -189,9 +284,9 @@ const TRANSPORT: Transport[] = [
   {
     id: 'airport',
     icon: 'airplane-outline',
-    label: 'Airport Ride',
-    sub: '~35 min to MAA',
-    fare: 'From ₹850',
+    label: 'Madurai airport',
+    sub: '~3 hr to MDU via Dindigul',
+    fare: 'From ₹4,500',
     gradFrom: 'rgba(60,80,140,0.18)',
     gradTo: 'rgba(40,60,110,0.04)',
     borderColor: 'rgba(100,120,200,0.22)',
@@ -199,9 +294,9 @@ const TRANSPORT: Transport[] = [
   {
     id: 'rental',
     icon: 'key-outline',
-    label: 'Rental Car',
-    sub: 'BMW 5 Series & more',
-    fare: 'From ₹3,500/day',
+    label: 'Self-drive SUV',
+    sub: 'Compass or Scorpio — hill-tuned',
+    fare: 'From ₹2,800/day',
     gradFrom: 'rgba(92,89,79,0.18)',
     gradTo: 'rgba(70,68,60,0.04)',
     borderColor: 'rgba(154,147,138,0.22)',
@@ -210,53 +305,53 @@ const TRANSPORT: Transport[] = [
 
 const GUIDES: Guide[] = [
   {
-    id: 'cultural',
+    id: 'sightseeing',
     icon: 'navigate-circle-outline',
-    label: 'Cultural Guide',
-    desc: 'Temples, heritage and living traditions',
-    duration: '4–6 hr',
+    label: 'Hill loop guide',
+    desc: "Pillar Rocks, Guna Caves, Pine Forest, Dolphin's Nose",
+    duration: '5 hr',
     price: '₹2,800',
-    lang: 'EN · HI · TA',
+    lang: 'EN · TA · HI',
     avail: true,
   },
   {
-    id: 'food',
-    icon: 'restaurant-outline',
-    label: 'Food Tour Guide',
-    desc: 'Street kitchens, spice bazaars, fine dining',
-    duration: '3 hr',
-    price: '₹1,800',
+    id: 'shola',
+    icon: 'leaf-outline',
+    label: 'Shola trek guide',
+    desc: 'Bombay Shola or Pambar — birds, gaur and dense forest',
+    duration: '3–4 hr',
+    price: '₹2,200',
     lang: 'EN · TA',
     avail: true,
   },
   {
     id: 'photo',
     icon: 'camera-outline',
-    label: 'Photography Guide',
-    desc: 'Golden hour spots and architectural angles',
+    label: 'Photography guide',
+    desc: 'Sunrise viewpoints, mist windows, architectural detail',
     duration: '3–4 hr',
     price: '₹3,200',
     lang: 'EN',
     avail: false,
   },
   {
-    id: 'luxury',
-    icon: 'diamond-outline',
-    label: 'Luxury City Tour',
-    desc: 'Private car, curated stops, white-glove service',
+    id: 'berijam',
+    icon: 'compass-outline',
+    label: 'Berijam permit & drive',
+    desc: 'Forest entry permit arranged, with a guide for the drive',
     duration: '6 hr',
-    price: '₹6,500',
+    price: '₹5,500',
     lang: 'EN · TA',
     avail: true,
   },
   {
-    id: 'shopper',
+    id: 'bazaar',
     icon: 'bag-handle-outline',
-    label: 'Personal Shopper',
-    desc: 'Boutiques, tailors and antique galleries',
-    duration: '4 hr',
-    price: '₹4,000',
-    lang: 'EN',
+    label: 'Bazaar & chocolate walk',
+    desc: 'Tibetan stalls, homemade chocolate, cheese and eucalyptus oil',
+    duration: '2 hr',
+    price: '₹1,400',
+    lang: 'EN · TA',
     avail: true,
   },
 ];
@@ -265,51 +360,85 @@ const EXPERIENCES: Experience[] = [
   {
     id: 'sunset',
     kicker: 'Best Tonight',
-    title: 'Golden Hour\nat the Seafront',
-    desc: 'Marina Beach · 18:42 · Clear skies forecast',
+    title: "Sunset on\nCoaker's Walk",
+    desc: 'Cliff promenade · ~18:30 · Mist clearing forecast',
     icon: 'sunny-outline',
     tag: 'Concierge Pick',
     gradA: '#0F2030',
     gradB: '#08121C',
+    backgroundImage: require('../../assets/Coakers.jpg'),
   },
   {
-    id: 'evening',
+    id: 'bonfire',
     kicker: 'Perfect Evening',
-    title: 'Kathak\nPerformance',
-    desc: 'Music Academy · 20:00 · Curated by the hotel',
-    icon: 'musical-notes-outline',
+    title: 'Bonfire\non the lawn',
+    desc: 'Hotel garden · 19:30 · Blankets and warm masala chai',
+    icon: 'flame-outline',
     tag: 'Exclusive',
-    gradA: '#1A1228',
-    gradB: '#0E0C1A',
+    gradA: '#1F1208',
+    gradB: '#120A03',
+    backgroundImage: require('../../assets/bonfire.jpg'),
   },
   {
-    id: 'rated',
-    kicker: 'Guest Favourite',
-    title: 'Dakshin\nRestaurant',
-    desc: '4.9 stars · Best Fine Dining 2024',
-    icon: 'star-outline',
-    tag: 'Highly Rated',
-    gradA: '#201205',
-    gradB: '#120A03',
+    id: 'sunrise',
+    kicker: 'Worth the Alarm',
+    title: "Sunrise at\nDolphin's Nose",
+    desc: '~06:00 · 8 km drive, then a 1 km walk to the ledge',
+    icon: 'partly-sunny-outline',
+    tag: 'Photographer’s Pick',
+    gradA: '#1A1220',
+    gradB: '#0E0C1A',
+    backgroundImage: require('../../assets/pillarrocks.jpg'),
   },
   {
     id: 'walk',
     kicker: 'Local Secret',
-    title: 'Mylapore\nMarket Walk',
-    desc: 'Silk, antiques and spice bazaars with a guide',
+    title: 'Tibetan bazaar\n& chocolate trail',
+    desc: 'Hand-knit woollens, homemade chocolate and cheese — with a guide',
     icon: 'navigate-outline',
     tag: 'Hidden Gem',
     gradA: '#141410',
     gradB: '#0C0C08',
+    backgroundImage: require('../../assets/garden.webp'),
   },
 ];
 
 // ─── MAIN SCREEN ───────────────────────────────────────────────────────────────
 
+function attractionsToSpots(items: Attraction[]): Spot[] {
+  return items.map((a) => ({
+    id: a.id,
+    categories: a.categories,
+    name: a.name,
+    subtitle: a.subtitle,
+    whyVisit: a.whyVisit,
+    lat: a.lat,
+    lng: a.lng,
+    rating: a.rating,
+    ratingCount: a.ratingCount,
+    gradA: a.gradA,
+    gradB: a.gradB,
+    gradC: a.gradC,
+    icon: a.icon as IconName,
+    backgroundImage: a.backgroundImage,
+  }));
+}
+
 export default function OtherServicesScreen() {
   void useLuxeFonts();
   const [activeCategory, setActiveCategory] = useState('all');
   const [savedSpots, setSavedSpots] = useState<Set<string>>(new Set());
+  const apiAttractions = useContentStore((s) => s.attractions);
+  const fetchAttractions = useContentStore((s) => s.fetchAttractions);
+
+  useEffect(() => {
+    fetchAttractions();
+  }, [fetchAttractions]);
+
+  const SPOTS: Spot[] =
+    apiAttractions && apiAttractions.length > 0
+      ? attractionsToSpots(apiAttractions)
+      : FALLBACK_SPOTS;
 
   const filteredSpots =
     activeCategory === 'all'
@@ -361,7 +490,7 @@ export default function OtherServicesScreen() {
         <SaveAndPlanSection />
 
         <View style={styles.footnote}>
-          <Text style={styles.footText}>Hôtel Octave · Chennai</Text>
+          <Text style={styles.footText}>Hotel Kodai International · Kodaikanal</Text>
           <Text style={styles.footText}>All arrangements on request</Text>
         </View>
       </ScrollView>
@@ -382,12 +511,20 @@ function HeroSection() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const hour = new Date().getHours();
+  const weather = useWeather(HOTEL_COORDS.lat, HOTEL_COORDS.lng, {
+    temperatureC: 17,
+    label: 'Cool, pine mist',
+  });
+  const plannedCount = usePlanStore((s) => s.spotIds.length);
+
   const conciergeRec =
     hour < 12
-      ? 'Perfect morning for a temple visit'
+      ? 'Misty morning — Coaker’s Walk before the crowd'
       : hour < 16
-      ? 'Perfect weather for sightseeing'
-      : 'Top experiences near your hotel tonight';
+      ? 'Clear afternoon for Pillar Rocks or the lake'
+      : 'Sundowner at the cliff, bonfire after dark';
+
+  const weatherIcon: IconName = weatherIconFor(weather.label);
 
   return (
     <View style={[styles.hero, { paddingTop: insets.top + 14 }]}>
@@ -419,7 +556,7 @@ function HeroSection() {
         </Pressable>
         <View style={styles.locationChip}>
           <Ionicons name="location" size={11} color={Luxe.goldBright} />
-          <Text style={styles.locationText}>Chennai · T. Nagar</Text>
+          <Text style={styles.locationText}>Kodaikanal · Lawsghat Road</Text>
         </View>
       </View>
 
@@ -436,8 +573,10 @@ function HeroSection() {
       {/* Context chips */}
       <View style={styles.heroChips}>
         <View style={styles.weatherChip}>
-          <Ionicons name="partly-sunny-outline" size={13} color={Luxe.goldBright} />
-          <Text style={styles.weatherText}>28°C · Partly cloudy</Text>
+          <Ionicons name={weatherIcon} size={13} color={Luxe.goldBright} />
+          <Text style={styles.weatherText}>
+            {weather.temperatureC}°C · {weather.label}
+          </Text>
         </View>
         <View style={styles.conciergeChip}>
           <Ionicons name="sparkles-outline" size={11} color={Luxe.gold} />
@@ -447,14 +586,26 @@ function HeroSection() {
 
       {/* Stat strip */}
       <View style={styles.statStrip}>
-        <HeroStat value="4" label="Landmarks nearby" />
+        <HeroStat value={String(SPOTS.length)} label="Spots curated" />
         <View style={styles.statDivider} />
-        <HeroStat value="12" label="Min to beach" />
+        <HeroStat value={String(plannedCount)} label="In your plan" />
         <View style={styles.statDivider} />
         <HeroStat value="24" unit="/7" label="Concierge" />
       </View>
     </View>
   );
+}
+
+function weatherIconFor(label: string): IconName {
+  const l = label.toLowerCase();
+  if (l.includes('thunder')) return 'thunderstorm-outline';
+  if (l.includes('snow')) return 'snow-outline';
+  if (l.includes('rain') || l.includes('shower') || l.includes('drizzle'))
+    return 'rainy-outline';
+  if (l.includes('mist') || l.includes('fog')) return 'cloudy-outline';
+  if (l.includes('overcast') || l.includes('cloud')) return 'cloud-outline';
+  if (l.includes('partly')) return 'partly-sunny-outline';
+  return 'sunny-outline';
 }
 
 function HeroStat({ value, unit, label }: { value: string; unit?: string; label: string }) {
@@ -521,32 +672,91 @@ function SpotCard({
   saved: boolean;
   onSave: () => void;
 }) {
+  const planned = usePlanStore((s) => s.isPlanned(spot.id));
+  const togglePlan = usePlanStore((s) => s.togglePlan);
+
+  const { distanceLabel, etaLabel } = useMemo(() => {
+    const km = haversineKm(HOTEL_COORDS, { lat: spot.lat, lng: spot.lng });
+    return {
+      distanceLabel: formatKm(km),
+      etaLabel: formatDuration(estimateDriveMinutes(km)),
+    };
+  }, [spot.lat, spot.lng]);
+
+  const openDirections = () => {
+    void Haptics.selectionAsync();
+    const label = encodeURIComponent(spot.name);
+    const url =
+      Platform.OS === 'ios'
+        ? `maps://?daddr=${spot.lat},${spot.lng}&q=${label}`
+        : `google.navigation:q=${spot.lat},${spot.lng}(${label})`;
+    void Linking.openURL(url).catch(() => {
+      void Linking.openURL(
+        `https://www.google.com/maps/dir/?api=1&destination=${spot.lat},${spot.lng}&destination_name=${label}`,
+      );
+    });
+  };
+
+  const onAddToPlan = () => {
+    const nowPlanned = togglePlan(spot.id);
+    void Haptics.impactAsync(
+      nowPlanned ? Haptics.ImpactFeedbackStyle.Medium : Haptics.ImpactFeedbackStyle.Light,
+    );
+  };
+
   return (
     <View style={styles.spotCard}>
-      {/* Photo panel — gradient simulating photography */}
-      <View style={styles.spotPhoto}>
-        <LinearGradient
-          colors={[spot.gradC, spot.gradB, spot.gradA]}
-          start={{ x: 0.1, y: 0 }}
-          end={{ x: 0.9, y: 1 }}
-          style={StyleSheet.absoluteFill}
-        />
-        {/* Depth vignette */}
-        <LinearGradient
-          colors={['transparent', 'rgba(8,7,10,0.78)']}
-          locations={[0.25, 1]}
-          style={StyleSheet.absoluteFill}
-        />
-        <View style={styles.spotPhotoContent}>
-          <View style={styles.spotPhotoIcon}>
-            <Ionicons name={spot.icon} size={22} color="rgba(255,240,210,0.70)" />
-          </View>
-          <View style={styles.spotEtaBadge}>
-            <Ionicons name="navigate-outline" size={11} color={Luxe.gold} />
-            <Text style={styles.spotEtaText}>{spot.eta} from hotel</Text>
+      {/* Photo panel */}
+      {spot.backgroundImage ? (
+        <View style={styles.spotPhoto}>
+          <ExpoImage
+            source={spot.backgroundImage}
+            style={[StyleSheet.absoluteFill, styles.spotPhotoBg]}
+            contentFit="cover"
+            cachePolicy="memory-disk"
+            priority="high"
+            transition={180}
+            recyclingKey={spot.id}
+          />
+          <LinearGradient
+            colors={['rgba(6,5,3,0.10)', 'rgba(6,5,3,0.55)', 'rgba(4,3,1,0.88)']}
+            locations={[0, 0.45, 1]}
+            style={StyleSheet.absoluteFill}
+          />
+          <View style={styles.spotPhotoContent}>
+            <View style={styles.spotPhotoIcon}>
+              <Ionicons name={spot.icon} size={22} color="rgba(255,240,210,0.70)" />
+            </View>
+            <View style={styles.spotEtaBadge}>
+              <Ionicons name="navigate-outline" size={11} color={Luxe.gold} />
+              <Text style={styles.spotEtaText}>{etaLabel} from hotel</Text>
+            </View>
           </View>
         </View>
-      </View>
+      ) : (
+        <View style={styles.spotPhoto}>
+          <LinearGradient
+            colors={[spot.gradC, spot.gradB, spot.gradA]}
+            start={{ x: 0.1, y: 0 }}
+            end={{ x: 0.9, y: 1 }}
+            style={StyleSheet.absoluteFill}
+          />
+          <LinearGradient
+            colors={['transparent', 'rgba(8,7,10,0.78)']}
+            locations={[0.25, 1]}
+            style={StyleSheet.absoluteFill}
+          />
+          <View style={styles.spotPhotoContent}>
+            <View style={styles.spotPhotoIcon}>
+              <Ionicons name={spot.icon} size={22} color="rgba(255,240,210,0.70)" />
+            </View>
+            <View style={styles.spotEtaBadge}>
+              <Ionicons name="navigate-outline" size={11} color={Luxe.gold} />
+              <Text style={styles.spotEtaText}>{etaLabel} from hotel</Text>
+            </View>
+          </View>
+        </View>
+      )}
 
       {/* Body */}
       <View style={styles.spotBody}>
@@ -568,12 +778,12 @@ function SpotCard({
         <View style={styles.spotMeta}>
           <View style={styles.spotMetaItem}>
             <Ionicons name="location-outline" size={11} color={Luxe.gold} />
-            <Text style={styles.spotMetaText}>{spot.distance}</Text>
+            <Text style={styles.spotMetaText}>{distanceLabel}</Text>
           </View>
           <View style={styles.spotMetaDot} />
           <View style={styles.spotMetaItem}>
             <Ionicons name="time-outline" size={11} color={Luxe.gold} />
-            <Text style={styles.spotMetaText}>{spot.eta}</Text>
+            <Text style={styles.spotMetaText}>{etaLabel}</Text>
           </View>
           <View style={styles.spotMetaDot} />
           <View style={styles.spotMetaItem}>
@@ -590,7 +800,7 @@ function SpotCard({
 
         {/* Actions */}
         <View style={styles.spotActions}>
-          <Pressable style={styles.spotActPrimary}>
+          <Pressable onPress={openDirections} style={styles.spotActPrimary}>
             <LinearGradient
               colors={['#F4C97E', '#D4A857', '#9A7A3F']}
               start={{ x: 0, y: 0 }}
@@ -600,9 +810,18 @@ function SpotCard({
             <Ionicons name="navigate-outline" size={14} color="#1A1206" />
             <Text style={styles.spotActPrimaryLabel}>Get Directions</Text>
           </Pressable>
-          <Pressable style={styles.spotActSecondary}>
-            <Ionicons name="calendar-outline" size={14} color={Luxe.goldBright} />
-            <Text style={styles.spotActSecondaryLabel}>Add to Plan</Text>
+          <Pressable
+            onPress={onAddToPlan}
+            style={[styles.spotActSecondary, planned && styles.spotActSecondaryActive]}
+          >
+            <Ionicons
+              name={planned ? 'checkmark-circle' : 'calendar-outline'}
+              size={14}
+              color={Luxe.goldBright}
+            />
+            <Text style={styles.spotActSecondaryLabel}>
+              {planned ? 'Added to plan' : 'Add to Plan'}
+            </Text>
           </Pressable>
         </View>
       </View>
@@ -610,29 +829,176 @@ function SpotCard({
   );
 }
 
+function ThreeDMapModal({ visible, onClose }: { visible: boolean; onClose: () => void }) {
+  const scale = useSharedValue(1);
+  const savedScale = useSharedValue(1);
+  const translateX = useSharedValue(0);
+  const translateY = useSharedValue(0);
+  const savedX = useSharedValue(0);
+  const savedY = useSharedValue(0);
+
+  const pinch = Gesture.Pinch()
+    .onUpdate((e) => {
+      scale.value = Math.max(1, Math.min(6, savedScale.value * e.scale));
+    })
+    .onEnd(() => {
+      savedScale.value = scale.value;
+    });
+
+  const pan = Gesture.Pan()
+    .onUpdate((e) => {
+      translateX.value = savedX.value + e.translationX;
+      translateY.value = savedY.value + e.translationY;
+    })
+    .onEnd(() => {
+      savedX.value = translateX.value;
+      savedY.value = translateY.value;
+    });
+
+  const combined = Gesture.Simultaneous(pan, pinch);
+
+  const animStyle = useAnimatedStyle(() => ({
+    transform: [
+      { translateX: translateX.value },
+      { translateY: translateY.value },
+      { scale: scale.value },
+    ],
+  }));
+
+  const handleClose = () => {
+    scale.value = withSpring(1);
+    savedScale.value = 1;
+    translateX.value = withSpring(0);
+    translateY.value = withSpring(0);
+    savedX.value = 0;
+    savedY.value = 0;
+    onClose();
+  };
+
+  const resetZoom = () => {
+    scale.value = withSpring(1);
+    savedScale.value = 1;
+    translateX.value = withSpring(0);
+    translateY.value = withSpring(0);
+    savedX.value = 0;
+    savedY.value = 0;
+  };
+
+  return (
+    <Modal visible={visible} transparent animationType="fade" statusBarTranslucent>
+      <GestureHandlerRootView style={{ flex: 1 }}>
+        <View style={styles.modalBg}>
+          {/* Header */}
+          <View style={styles.modalHeader}>
+            <View>
+              <Text style={styles.modalKicker}>3D Hotel Map</Text>
+              <Text style={styles.modalTitle}>Hotel Kodai International</Text>
+            </View>
+            <View style={styles.modalHeaderActions}>
+              <Pressable onPress={resetZoom} style={styles.modalActionBtn} hitSlop={8}>
+                <Ionicons name="scan-outline" size={18} color={Luxe.ivoryDim} />
+              </Pressable>
+              <Pressable onPress={handleClose} style={styles.modalCloseBtn} hitSlop={8}>
+                <Ionicons name="close" size={20} color={Luxe.ivory} />
+              </Pressable>
+            </View>
+          </View>
+
+          {/* Gesture image */}
+          <GestureDetector gesture={combined}>
+            <View style={styles.modalImageArea}>
+              <AnimatedExpoImage
+                source={require('../../assets/2-map.jpg')}
+                style={[styles.modalImage, animStyle]}
+                contentFit="contain"
+                cachePolicy="memory-disk"
+                priority="high"
+                recyclingKey="hotel-map"
+              />
+            </View>
+          </GestureDetector>
+
+          {/* Hint footer */}
+          <View style={styles.modalFooter}>
+            <Ionicons name="hand-left-outline" size={12} color={Luxe.muted} />
+            <Text style={styles.modalHint}>Pinch to zoom · Drag to pan · Double-tap reset</Text>
+          </View>
+        </View>
+      </GestureHandlerRootView>
+    </Modal>
+  );
+}
+
 function MapSection() {
+  const [mapModalVisible, setMapModalVisible] = useState(false);
   const mapW = SW - 48;
   const hx = mapW * 0.44;
   const hy = 108;
   const mapH = 216;
 
+  const labelFor = (id: string): string => {
+    const spot = SPOTS.find((s) => s.id === id);
+    if (!spot) return '';
+    const km = haversineKm(HOTEL_COORDS, { lat: spot.lat, lng: spot.lng });
+    return formatDuration(estimateDriveMinutes(km));
+  };
+
   const mapSpots = [
-    { name: 'Marina', x: mapW * 0.78, y: 84, color: '#3A8FBF', label: '12 min' },
-    { name: 'Temple', x: mapW * 0.24, y: 152, color: '#D4A857', label: '18 min' },
-    { name: 'Mall', x: mapW * 0.17, y: 68, color: '#9A6FBF', label: '9 min' },
-    { name: 'Shore', x: mapW * 0.62, y: 172, color: '#A0987A', label: '70 min' },
+    { name: 'Lake', x: mapW * 0.78, y: 84, color: '#3A8FBF', label: labelFor('lake') },
+    { name: "Coaker's", x: mapW * 0.24, y: 152, color: '#D4A857', label: labelFor('coakers') },
+    { name: 'Bryant', x: mapW * 0.17, y: 68, color: '#7FA85A', label: labelFor('bryant') },
+    { name: 'Pillar Rocks', x: mapW * 0.62, y: 172, color: '#A0987A', label: labelFor('pillar') },
   ];
 
   const openMaps = () => {
     const url =
       Platform.OS === 'ios'
-        ? 'maps://maps.apple.com/?ll=13.0827,80.2707&q=H%C3%B4tel+Octave+Chennai'
-        : 'geo:13.0827,80.2707?q=Hotel+Octave+Chennai';
+        ? 'maps://maps.apple.com/?ll=10.2404,77.4897&q=Kodai+International'
+        : 'geo:10.2404,77.4897?q=Kodai+International';
     void Linking.openURL(url);
   };
 
   return (
     <View style={styles.mapCard}>
+      {/* 3D hotel view — tap to expand */}
+      <Pressable
+        onPress={() => {
+          void Haptics.selectionAsync();
+          setMapModalVisible(true);
+        }}
+        style={styles.view3DBtn}
+      >
+        <ExpoImage
+          source={require('../../assets/2-map.jpg')}
+          style={StyleSheet.absoluteFill}
+          contentFit="cover"
+          cachePolicy="memory-disk"
+          priority="high"
+          recyclingKey="hotel-map"
+        />
+        <LinearGradient
+          colors={['rgba(8,7,10,0.08)', 'rgba(8,7,10,0.72)']}
+          locations={[0, 1]}
+          style={StyleSheet.absoluteFill}
+          pointerEvents="none"
+        />
+        <View style={styles.view3DContent}>
+          <View style={{ flex: 1 }}>
+            <View style={styles.view3DBadge}>
+              <Ionicons name="cube-outline" size={10} color={Luxe.goldBright} />
+              <Text style={styles.view3DBadgeText}>3D Hotel Map</Text>
+            </View>
+            <Text style={styles.view3DTitle}>Hotel Kodai International</Text>
+            <Text style={styles.view3DSub}>Tap to explore · Pinch & drag to navigate</Text>
+          </View>
+          <View style={styles.view3DExpandRing}>
+            <Ionicons name="expand-outline" size={20} color={Luxe.goldBright} />
+          </View>
+        </View>
+      </Pressable>
+
+      <ThreeDMapModal visible={mapModalVisible} onClose={() => setMapModalVisible(false)} />
+
       <Svg width={mapW} height={mapH}>
         <Defs>
           <RadialGradient id="hotelGlow" cx="50%" cy="50%" r="50%">
@@ -713,7 +1079,7 @@ function MapSection() {
           fill={Luxe.gold}
           textAnchor="middle"
         >
-          HÔTEL OCTAVE
+          HKI · ANNA SALAI
         </SvgLabel>
       </Svg>
 
@@ -837,32 +1203,61 @@ function ExperiencesRail() {
     >
       {EXPERIENCES.map((exp) => (
         <View key={exp.id} style={styles.expCard}>
+          {exp.backgroundImage ? (
+            <ExpoImage
+              source={exp.backgroundImage}
+              style={[StyleSheet.absoluteFill, styles.expBgImage]}
+              contentFit="cover"
+              cachePolicy="memory-disk"
+              priority="high"
+              transition={180}
+              recyclingKey={`exp-${exp.id}`}
+            />
+          ) : null}
           <LinearGradient
             colors={[exp.gradA, exp.gradB]}
             start={{ x: 0.15, y: 0 }}
             end={{ x: 0.85, y: 1 }}
-            style={[StyleSheet.absoluteFill, { borderRadius: LuxeRadii.xl }]}
+            style={[StyleSheet.absoluteFill, { borderRadius: LuxeRadii.xl, opacity: exp.backgroundImage ? 0.42 : 1 }]}
           />
+          {exp.backgroundImage ? (
+            <>
+              {/* top scrim — keeps icon + tag chips legible */}
+              <LinearGradient
+                colors={['rgba(4,3,1,0.72)', 'rgba(4,3,1,0.22)', 'transparent']}
+                locations={[0, 0.30, 0.58]}
+                style={[StyleSheet.absoluteFill, { borderRadius: LuxeRadii.xl }]}
+              />
+              {/* bottom scrim — keeps title + desc + CTA legible */}
+              <LinearGradient
+                colors={['transparent', 'rgba(5,3,1,0.72)', 'rgba(3,2,0,0.96)']}
+                locations={[0.32, 0.62, 1]}
+                style={[StyleSheet.absoluteFill, { borderRadius: LuxeRadii.xl }]}
+              />
+            </>
+          ) : null}
+          {/* gold top hairline */}
+          <View style={styles.expHairline} pointerEvents="none" />
           <View
             style={[
               StyleSheet.absoluteFill,
-              { borderRadius: LuxeRadii.xl, borderWidth: 0.5, borderColor: 'rgba(255,240,210,0.09)' },
+              { borderRadius: LuxeRadii.xl, borderWidth: 0.5, borderColor: 'rgba(255,240,210,0.10)' },
             ]}
             pointerEvents="none"
           />
           <View style={styles.expTop}>
-            <View style={styles.expIconBox}>
+            <View style={[styles.expIconBox, exp.backgroundImage ? styles.expIconBoxOnImage : null]}>
               <Ionicons name={exp.icon} size={18} color={Luxe.goldBright} />
             </View>
-            <View style={styles.expTagPill}>
-              <Text style={styles.expTag}>{exp.tag}</Text>
+            <View style={[styles.expTagPill, exp.backgroundImage ? styles.expTagPillOnImage : null]}>
+              <Text style={[styles.expTag, exp.backgroundImage ? styles.expTextOnImage : null]}>{exp.tag}</Text>
             </View>
           </View>
           <View style={{ flex: 1 }} />
-          <Text style={styles.expKicker}>{exp.kicker}</Text>
-          <Text style={styles.expTitle}>{exp.title}</Text>
-          <Text style={styles.expDesc} numberOfLines={2}>{exp.desc}</Text>
-          <View style={styles.expCta}>
+          <Text style={[styles.expKicker, exp.backgroundImage ? styles.expTextOnImage : null]}>{exp.kicker}</Text>
+          <Text style={[styles.expTitle, exp.backgroundImage ? styles.expTitleOnImage : null]}>{exp.title}</Text>
+          <Text style={[styles.expDesc, exp.backgroundImage ? styles.expDescOnImage : null]} numberOfLines={2}>{exp.desc}</Text>
+          <View style={[styles.expCta, exp.backgroundImage ? styles.expCtaOnImage : null]}>
             <Text style={styles.expCtaLabel}>Arrange →</Text>
           </View>
         </View>
@@ -872,8 +1267,36 @@ function ExperiencesRail() {
 }
 
 function SaveAndPlanSection() {
-  const [saved, setSaved] = useState(false);
-  const [inItinerary, setInItinerary] = useState(false);
+  const plannedIds = usePlanStore((s) => s.spotIds);
+  const clearPlan = usePlanStore((s) => s.clearPlan);
+  const plannedSpots = SPOTS.filter((s) => plannedIds.includes(s.id));
+  const count = plannedSpots.length;
+
+  const openRoute = () => {
+    if (count === 0) return;
+    void Haptics.selectionAsync();
+    const origin = `${HOTEL_COORDS.lat},${HOTEL_COORDS.lng}`;
+    const waypoints = plannedSpots
+      .slice(0, -1)
+      .map((s) => `${s.lat},${s.lng}`)
+      .join('|');
+    const dest = plannedSpots[plannedSpots.length - 1];
+    const destStr = dest ? `${dest.lat},${dest.lng}` : origin;
+    const params = new URLSearchParams({
+      api: '1',
+      origin,
+      destination: destStr,
+      travelmode: 'driving',
+    });
+    if (waypoints) params.append('waypoints', waypoints);
+    void Linking.openURL(`https://www.google.com/maps/dir/?${params.toString()}`);
+  };
+
+  const onClear = () => {
+    if (count === 0) return;
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    clearPlan();
+  };
 
   return (
     <View style={styles.savePlan}>
@@ -890,32 +1313,34 @@ function SaveAndPlanSection() {
         ]}
         pointerEvents="none"
       />
-      <Text style={styles.savePlanTitle}>Save & Plan Your Visit</Text>
+      <Text style={styles.savePlanTitle}>
+        {count === 0
+          ? 'Build your day'
+          : count === 1
+            ? '1 spot in your plan'
+            : `${count} spots in your plan`}
+      </Text>
       <Text style={styles.savePlanSub}>
-        Collect your favourite spots and share your curated itinerary.
+        {count === 0
+          ? 'Tap “Add to Plan” on any spot to start your itinerary.'
+          : plannedSpots.map((s) => s.name).join(' · ')}
       </Text>
       <View style={styles.savePlanActions}>
-        <Pressable onPress={() => setSaved((v) => !v)} style={styles.savePlanBtn}>
-          <Ionicons
-            name={saved ? 'heart' : 'heart-outline'}
-            size={16}
-            color={saved ? '#E84C6A' : Luxe.goldBright}
-          />
-          <Text style={styles.savePlanBtnLabel}>{saved ? 'Saved' : 'Save'}</Text>
+        <Pressable
+          onPress={openRoute}
+          disabled={count === 0}
+          style={[styles.savePlanBtn, count === 0 && { opacity: 0.4 }]}
+        >
+          <Ionicons name="navigate-outline" size={16} color={Luxe.goldBright} />
+          <Text style={styles.savePlanBtnLabel}>Open route</Text>
         </Pressable>
-        <Pressable onPress={() => setInItinerary((v) => !v)} style={styles.savePlanBtn}>
-          <Ionicons
-            name={inItinerary ? 'calendar' : 'calendar-outline'}
-            size={16}
-            color={Luxe.goldBright}
-          />
-          <Text style={styles.savePlanBtnLabel}>
-            {inItinerary ? 'In Itinerary' : 'Add to Itinerary'}
-          </Text>
-        </Pressable>
-        <Pressable style={styles.savePlanBtn}>
-          <Ionicons name="share-outline" size={16} color={Luxe.goldBright} />
-          <Text style={styles.savePlanBtnLabel}>Share Trip</Text>
+        <Pressable
+          onPress={onClear}
+          disabled={count === 0}
+          style={[styles.savePlanBtn, count === 0 && { opacity: 0.4 }]}
+        >
+          <Ionicons name="trash-outline" size={16} color={Luxe.goldBright} />
+          <Text style={styles.savePlanBtnLabel}>Clear plan</Text>
         </Pressable>
       </View>
     </View>
@@ -1078,6 +1503,10 @@ const styles = StyleSheet.create({
     height: 188, overflow: 'hidden',
     borderTopLeftRadius: LuxeRadii.xl, borderTopRightRadius: LuxeRadii.xl,
   },
+  spotPhotoBg: {
+    borderTopLeftRadius: LuxeRadii.xl, borderTopRightRadius: LuxeRadii.xl,
+    opacity: 0.78,
+  },
   spotPhotoContent: {
     flex: 1, padding: 16,
     flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between',
@@ -1147,11 +1576,98 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(244,201,126,0.07)',
     borderWidth: 0.5, borderColor: 'rgba(244,201,126,0.22)',
   },
+  spotActSecondaryActive: {
+    backgroundColor: 'rgba(244,201,126,0.18)',
+    borderColor: 'rgba(244,201,126,0.55)',
+  },
   spotActSecondaryLabel: {
     fontFamily: LuxeFonts.sansMedium, fontSize: 13, color: Luxe.goldBright,
   },
 
   // ── MAP ───────────────────────────────────────────────────────────────────
+  view3DBtn: {
+    height: 190, overflow: 'hidden',
+    borderBottomWidth: 0.5, borderBottomColor: 'rgba(244,201,126,0.12)',
+  },
+  view3DContent: {
+    position: 'absolute', bottom: 0, left: 0, right: 0,
+    flexDirection: 'row', alignItems: 'flex-end',
+    padding: 16, gap: 12,
+  },
+  view3DBadge: {
+    flexDirection: 'row', alignItems: 'center', gap: 5,
+    alignSelf: 'flex-start',
+    paddingHorizontal: 9, paddingVertical: 5, borderRadius: 9999,
+    backgroundColor: 'rgba(8,7,10,0.60)',
+    borderWidth: 0.5, borderColor: 'rgba(244,201,126,0.28)',
+    marginBottom: 8,
+  },
+  view3DBadgeText: {
+    fontFamily: LuxeFonts.monoMedium, fontSize: 8.5,
+    color: Luxe.gold, letterSpacing: 1, textTransform: 'uppercase',
+  },
+  view3DTitle: {
+    fontFamily: LuxeFonts.serif, fontSize: 17, color: Luxe.ivory, letterSpacing: -0.3,
+  },
+  view3DSub: {
+    fontFamily: LuxeFonts.sansLight, fontSize: 11, color: Luxe.ivoryDim, marginTop: 3,
+  },
+  view3DExpandRing: {
+    width: 44, height: 44, borderRadius: 22,
+    alignItems: 'center', justifyContent: 'center',
+    backgroundColor: 'rgba(8,7,10,0.55)',
+    borderWidth: 0.5, borderColor: 'rgba(244,201,126,0.38)',
+  },
+
+  // ── 3D MAP MODAL ─────────────────────────────────────────────────────────
+  modalBg: {
+    flex: 1, backgroundColor: 'rgba(6,5,8,0.96)',
+  },
+  modalHeader: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: 20, paddingTop: 56, paddingBottom: 16,
+    borderBottomWidth: 0.5, borderBottomColor: 'rgba(255,240,210,0.08)',
+  },
+  modalKicker: {
+    fontFamily: LuxeFonts.monoMedium, fontSize: 9.5,
+    color: Luxe.gold, letterSpacing: 2, textTransform: 'uppercase', marginBottom: 4,
+  },
+  modalTitle: {
+    fontFamily: LuxeFonts.serif, fontSize: 20, color: Luxe.ivory, letterSpacing: -0.4,
+  },
+  modalHeaderActions: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+  },
+  modalActionBtn: {
+    width: 40, height: 40, borderRadius: 20,
+    alignItems: 'center', justifyContent: 'center',
+    backgroundColor: 'rgba(255,240,210,0.06)',
+    borderWidth: 0.5, borderColor: 'rgba(255,240,210,0.10)',
+  },
+  modalCloseBtn: {
+    width: 40, height: 40, borderRadius: 20,
+    alignItems: 'center', justifyContent: 'center',
+    backgroundColor: 'rgba(255,240,210,0.08)',
+    borderWidth: 0.5, borderColor: 'rgba(255,240,210,0.14)',
+  },
+  modalImageArea: {
+    flex: 1, overflow: 'hidden',
+    alignItems: 'center', justifyContent: 'center',
+  },
+  modalImage: {
+    width: Dimensions.get('window').width,
+    height: Dimensions.get('window').height * 0.72,
+  },
+  modalFooter: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    gap: 8, paddingVertical: 18,
+    borderTopWidth: 0.5, borderTopColor: 'rgba(255,240,210,0.08)',
+  },
+  modalHint: {
+    fontFamily: LuxeFonts.monoMedium, fontSize: 9.5,
+    color: Luxe.muted, letterSpacing: 0.8,
+  },
+
   mapCard: {
     marginHorizontal: 24, borderRadius: LuxeRadii.xl, overflow: 'hidden',
     backgroundColor: '#09080A',
@@ -1273,9 +1789,25 @@ const styles = StyleSheet.create({
   expRail: { flexGrow: 0 },
   expScroll: { gap: 14, paddingHorizontal: 24, paddingBottom: 2 },
   expCard: {
-    width: SW * 0.66, height: 224,
+    width: SW * 0.66, height: 240,
     borderRadius: LuxeRadii.xl, overflow: 'hidden',
     padding: 18,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000', shadowOpacity: 0.45,
+        shadowRadius: 20, shadowOffset: { width: 0, height: 10 },
+      },
+      android: { elevation: 6 },
+    }),
+  },
+  expBgImage: {
+    borderRadius: LuxeRadii.xl,
+    opacity: 0.95,
+  },
+  expHairline: {
+    position: 'absolute', top: 0, left: 0, right: 0,
+    height: 1, backgroundColor: 'rgba(244,201,126,0.45)',
+    zIndex: 2,
   },
   expTop: {
     flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between',
@@ -1286,14 +1818,27 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(244,201,126,0.09)',
     borderWidth: 0.5, borderColor: 'rgba(244,201,126,0.22)',
   },
+  expIconBoxOnImage: {
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    borderColor: 'rgba(244,201,126,0.38)',
+  },
   expTagPill: {
     paddingHorizontal: 10, paddingVertical: 5, borderRadius: 9999,
     backgroundColor: 'rgba(244,201,126,0.10)',
     borderWidth: 0.5, borderColor: 'rgba(244,201,126,0.24)',
   },
+  expTagPillOnImage: {
+    backgroundColor: 'rgba(0,0,0,0.50)',
+    borderColor: 'rgba(244,201,126,0.40)',
+  },
   expTag: {
     fontFamily: LuxeFonts.monoMedium, fontSize: 8.5,
     color: Luxe.gold, letterSpacing: 1.2, textTransform: 'uppercase',
+  },
+  expTextOnImage: {
+    textShadowColor: 'rgba(0,0,0,0.55)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 4,
   },
   expKicker: {
     fontFamily: LuxeFonts.monoMedium, fontSize: 9.5,
@@ -1303,15 +1848,30 @@ const styles = StyleSheet.create({
     fontFamily: LuxeFonts.serif, fontSize: 22, lineHeight: 24,
     color: Luxe.ivory, letterSpacing: -0.4,
   },
+  expTitleOnImage: {
+    textShadowColor: 'rgba(0,0,0,0.55)',
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 8,
+  },
   expDesc: {
     fontFamily: LuxeFonts.sansLight, fontSize: 11.5, lineHeight: 16.5,
     color: Luxe.ivoryDim, marginTop: 6,
+  },
+  expDescOnImage: {
+    color: 'rgba(245,239,224,0.86)',
+    textShadowColor: 'rgba(0,0,0,0.45)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 4,
   },
   expCta: {
     marginTop: 12, alignSelf: 'flex-start',
     paddingHorizontal: 14, paddingVertical: 7, borderRadius: 9999,
     backgroundColor: 'rgba(244,201,126,0.10)',
     borderWidth: 0.5, borderColor: 'rgba(244,201,126,0.26)',
+  },
+  expCtaOnImage: {
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    borderColor: 'rgba(244,201,126,0.48)',
   },
   expCtaLabel: {
     fontFamily: LuxeFonts.sansMedium, fontSize: 12, color: Luxe.goldBright,

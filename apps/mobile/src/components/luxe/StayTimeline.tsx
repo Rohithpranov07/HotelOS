@@ -32,6 +32,7 @@ export function StayTimeline({ items, dayLabel = 'Day 2 of 4', kicker }: StayTim
         end={{ x: 0, y: 1 }}
         style={styles.card}
       >
+        <View style={styles.topHairline} />
         <View style={styles.rail} />
         <View style={styles.row}>
           {items.map((it, i) => (
@@ -78,17 +79,25 @@ const styles = StyleSheet.create({
   },
   card: {
     paddingHorizontal: 18,
-    paddingTop: 18,
-    paddingBottom: 16,
+    paddingTop: 22,
+    paddingBottom: 18,
     borderRadius: 22,
     borderWidth: 0.5,
-    borderColor: Luxe.hairline,
+    borderColor: 'rgba(255,240,210,0.10)',
+  },
+  topHairline: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 1,
+    backgroundColor: 'rgba(244,201,126,0.36)',
   },
   rail: {
     position: 'absolute',
     left: 24,
     right: 24,
-    top: 32,
+    top: 36,
     height: 1,
     backgroundColor: 'rgba(255,240,210,0.10)',
   },
@@ -97,7 +106,17 @@ const styles = StyleSheet.create({
   dot: { width: 6, height: 6, borderRadius: 3, marginTop: 2 },
   dotIdle: { backgroundColor: 'rgba(255,240,210,0.16)' },
   dotDone: { backgroundColor: Luxe.goldDeep, width: 6, height: 6, borderRadius: 3 },
-  dotActive: { width: 10, height: 10, borderRadius: 5, backgroundColor: Luxe.goldBright, marginTop: 0 },
+  dotActive: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: Luxe.goldBright,
+    marginTop: 0,
+    shadowColor: Luxe.amberGlow,
+    shadowOpacity: 0.9,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 0 },
+  },
   time: {
     fontFamily: LuxeFonts.monoMedium,
     fontSize: 10.5,

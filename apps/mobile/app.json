@@ -1,17 +1,17 @@
 {
   "expo": {
-    "name": "Hotel OS",
+    "name": "Hotel Kodai International",
     "slug": "hotel-os",
     "version": "0.1.0",
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
+    "icon": "./assets/hki-icon.png",
     "scheme": "hotelos",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "splash": {
-      "image": "./assets/splash.png",
+      "image": "./assets/hki-icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#1B2A4A"
+      "backgroundColor": "#FFFFFF"
     },
     "ios": {
       "supportsTablet": false,
@@ -28,8 +28,8 @@
       "package": "io.hotelosapp.mobile",
       "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
-        "foregroundImage": "./assets/icon.png",
-        "backgroundColor": "#1B2A4A"
+        "foregroundImage": "./assets/hki-icon.png",
+        "backgroundColor": "#FFFFFF"
       },
       "permissions": [
         "android.permission.CAMERA",
@@ -48,13 +48,25 @@
       [
         "expo-camera",
         {
-          "cameraPermission": "Allow Hotel OS to access your camera for ID scanning."
+          "cameraPermission": "Allow Hotel Kodai International to access your camera for ID scanning."
         }
       ],
-      "expo-font"
+      "expo-font",
+      "expo-audio"
     ],
     "experiments": {
       "typedRoutes": true
+    },
+    "extra": {
+      "apiUrl": "http://192.168.31.60:3001",
+      "EXPO_PUBLIC_API_URL": "http://192.168.31.60:3001",
+      "EXPO_PUBLIC_AUTH_API_URL": "http://192.168.31.60:3001",
+      "EXPO_PUBLIC_BOOKING_API_URL": "http://192.168.31.60:3002",
+      "EXPO_PUBLIC_ORDERS_API_URL": "http://192.168.31.60:3003",
+      "EXPO_PUBLIC_ACCESS_API_URL": "http://192.168.31.60:3004",
+      "EXPO_PUBLIC_LOYALTY_API_URL": "http://192.168.31.60:3005",
+      "EXPO_PUBLIC_AI_API_URL": "http://192.168.31.60:3006",
+      "EXPO_PUBLIC_PAYMENTS_API_URL": "http://192.168.31.60:3007"
     }
   }
 }

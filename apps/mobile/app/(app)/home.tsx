@@ -12,6 +12,7 @@ import { DiscoveryRail } from '../../src/components/luxe/DiscoveryRail';
 import { LuxeLoyaltyCard } from '../../src/components/luxe/LuxeLoyaltyCard';
 import { RoomPreferences } from '../../src/components/luxe/RoomPreferences';
 import { SectionHeader } from '../../src/components/luxe/SectionHeader';
+import { PremiumScreen } from '../../src/components/luxe/PremiumScreen';
 import { Luxe, LuxeFonts } from '../../src/theme/luxe';
 import { useLuxeFonts } from '../../src/lib/useLuxeFonts';
 import { useAuthStore } from '../../src/stores/auth.store';
@@ -98,6 +99,7 @@ export default function HomeScreen() {
 
   return (
     <View style={styles.root}>
+      <PremiumScreen>
       <SafeAreaView style={{ flex: 1 }} edges={[]}>
         <ScrollView
           showsVerticalScrollIndicator={false}
@@ -147,19 +149,23 @@ export default function HomeScreen() {
           </View>
 
           {/* QUICK ACTIONS */}
-          <View style={{ marginTop: 60 }}>
+          <View style={{ marginTop: 64 }}>
             <SectionHeader kicker="In reach" title="At a touch" right="03" />
             <LuxeActionGrid items={actions} />
           </View>
 
+          <View style={styles.sectionRule} />
+
           {/* ROOM PREFERENCES */}
-          <View style={{ marginTop: 60 }}>
+          <View style={{ marginTop: 56 }}>
             <SectionHeader kicker="Your suite" title="Room preferences" right="Saved" />
             <RoomPreferences />
           </View>
 
+          <View style={styles.sectionRule} />
+
           {/* SMART CONTEXT */}
-          <View style={{ marginTop: 60 }}>
+          <View style={{ marginTop: 56 }}>
             <SectionHeader kicker="Right now" title="Quiet intelligence" right="Live" />
             <View style={styles.smartStack}>
               {buildSmartCards({ reservation, activeOrders, router }).map((card, i) => (
@@ -168,8 +174,10 @@ export default function HomeScreen() {
             </View>
           </View>
 
+          <View style={styles.sectionRule} />
+
           {/* DISCOVERY */}
-          <View style={{ marginTop: 64 }}>
+          <View style={{ marginTop: 56 }}>
             <SectionHeader
               kicker="The edit"
               title="Curated for tonight"
@@ -180,7 +188,7 @@ export default function HomeScreen() {
           </View>
 
           {/* LOYALTY */}
-          <View style={{ marginTop: 64, paddingHorizontal: 22 }}>
+          <View style={{ marginTop: 72, paddingHorizontal: 22 }}>
             <Text style={styles.societyLabel}>The Society</Text>
             <LuxeLoyaltyCard
               tier={tierForGuest(guest.loyaltyTier)}
@@ -193,7 +201,7 @@ export default function HomeScreen() {
 
           {/* FOOTNOTE */}
           <View style={styles.footnote}>
-            <Text style={styles.footnoteText}>Hôtel Octave · v 2.6</Text>
+            <Text style={styles.footnoteText}>Hotel Kodai International · v 2.6</Text>
             <Text style={styles.footnoteText}>End-to-end encrypted</Text>
           </View>
         </ScrollView>
@@ -206,6 +214,7 @@ export default function HomeScreen() {
           style={styles.bottomFade}
         />
       </SafeAreaView>
+      </PremiumScreen>
     </View>
   );
 }
@@ -291,6 +300,7 @@ interface SmartCardData {
   action?: string;
   glow?: 'gold' | 'ink' | 'bronze';
   live?: boolean;
+  backgroundImage?: number;
   onPress?: () => void;
 }
 
@@ -326,16 +336,18 @@ function atmosphereCard(router: ReturnType<typeof useRouter>): SmartCardData {
       body: 'Breakfast can be arranged in-suite — pastries, fruit, and your preferred brew.',
       action: 'Order',
       glow: 'gold',
+      backgroundImage: require('../../assets/dining.webp'),
       onPress: () => router.push('/(app)/services'),
     };
   }
   if (h >= 11 && h < 17) {
     return {
       kicker: 'This afternoon',
-      title: 'The pool is unhurried right now.',
-      body: 'A quiet swim, a cold towel, and the afternoon is yours. The spa has open slots too.',
+      title: 'The garden is unhurried right now.',
+      body: 'A walk through the grounds, a round of mini golf, or the spa — the afternoon is yours.',
       action: 'Arrange',
       glow: 'ink',
+      backgroundImage: require('../../assets/garden.webp'),
       onPress: () => router.push('/(app)/concierge'),
     };
   }
@@ -343,9 +355,10 @@ function atmosphereCard(router: ReturnType<typeof useRouter>): SmartCardData {
     return {
       kicker: 'This evening',
       title: 'The kitchen is open.',
-      body: "Chef's tasting menu, a bottle from the cellar, or just what you're craving.",
+      body: "A South Indian thali, a bottle from the bar, or just what you're craving — the bonfire is being prepared for later.",
       action: 'Order',
       glow: 'gold',
+      backgroundImage: require('../../assets/restraunt.jpg'),
       onPress: () => router.push('/(app)/services'),
     };
   }
@@ -355,6 +368,7 @@ function atmosphereCard(router: ReturnType<typeof useRouter>): SmartCardData {
     body: 'A nightcap, a late-night snack, or simply silence — the concierge is always here.',
     action: 'Ask',
     glow: 'ink',
+    backgroundImage: require('../../assets/bonfire.jpg'),
     onPress: () => router.push('/(app)/concierge'),
   };
 }
@@ -382,6 +396,7 @@ function buildSmartCards({
       action: 'Track',
       glow: 'gold',
       live: true,
+      backgroundImage: require('../../assets/restraunt.jpg'),
       onPress: () => router.push('/(app)/orders'),
     });
   }
@@ -394,6 +409,7 @@ function buildSmartCards({
       body: 'Settle at any time — card, UPI, or loyalty points all accepted.',
       action: 'View',
       glow: 'bronze',
+      backgroundImage: require('../../assets/Bryantpark.jpg'),
       onPress: () => router.push('/(app)/folio'),
     });
   }
@@ -406,6 +422,7 @@ function buildSmartCards({
       body: 'Housekeeping will hold. Tap to change your preference.',
       action: 'Manage',
       glow: 'ink',
+      backgroundImage: require('../../assets/housekeeping.jpg'),
       onPress: () => router.push('/(app)/housekeeping'),
     });
   }
@@ -418,6 +435,7 @@ function buildSmartCards({
       body: 'Complete digital check-in and walk straight to your suite — your key will be waiting.',
       action: 'Begin',
       glow: 'gold',
+      backgroundImage: require('../../assets/facade.jpg'),
       onPress: () => router.push('/(app)/checkin'),
     });
   }
@@ -431,6 +449,7 @@ function buildSmartCards({
       body: 'Anything you need — ordered, arranged, or simply answered.',
       action: 'Chat',
       glow: 'bronze',
+      backgroundImage: require('../../assets/spa.jpg'),
       onPress: () => router.push('/(app)/concierge'),
     });
   } else if (cards.length === 1) {
@@ -581,14 +600,21 @@ const styles = StyleSheet.create({
     color: Luxe.goldBright,
   },
   smartStack: { paddingHorizontal: 22, gap: 12 },
+  sectionRule: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: 'rgba(255,240,210,0.07)',
+    marginHorizontal: 28,
+    marginTop: 60,
+  },
   societyLabel: {
     fontFamily: LuxeFonts.monoMedium,
     fontSize: 9.5,
     color: Luxe.gold,
-    letterSpacing: 2.2,
+    letterSpacing: 2.8,
     textTransform: 'uppercase',
-    marginBottom: 12,
-    paddingHorizontal: 6,
+    marginBottom: 16,
+    paddingHorizontal: 4,
+    opacity: 0.9,
   },
   footnote: {
     marginTop: 36,

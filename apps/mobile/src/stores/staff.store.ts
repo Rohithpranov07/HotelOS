@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { aiApi, ordersApi } from '../lib/api';
+import { bridgeStatusToGuest } from '../lib/orderBridge';
 
 export type TaskType = 'food' | 'beverage' | 'housekeeping' | 'laundry' | 'maintenance' | 'concierge';
 export type TaskStatus =
@@ -39,6 +40,7 @@ export interface StaffTask {
   reservationId: string;
   propertyId?: string;
   completionPhotoUrl?: string | null;
+  escalation?: EscalationLog | null;
 }
 
 export interface GuestProfileFull {
@@ -72,6 +74,25 @@ export interface GuestBrief {
   generatedAt: number;
 }
 
+export interface NegativeFeedbackPing {
+  id: string;
+  reservationId: string;
+  guestName: string;
+  roomNumber: string;
+  overallScore: number; // 1–5
+  comment?: string;
+  receivedAt: string;
+  acknowledged: boolean;
+}
+
+export interface EscalationLog {
+  taskId: string;
+  fromRole: string;
+  toRole: string;
+  reason: string;
+  at: string;
+}
+
 interface StaffState {
   tasks: StaffTask[];
   guestProfiles: Record<string, GuestProfileFull>;
@@ -79,6 +100,9 @@ interface StaffState {
   isLoading: boolean;
   error: string | null;
   filter: { type?: TaskType | 'all'; mine?: boolean };
+  onShift: boolean;
+  shiftStartedAt: string | null;
+  completedTodayIds: string[];
 
   fetchTasks: () => Promise<void>;
   setFilter: (f: Partial<{ type?: TaskType | 'all'; mine?: boolean }>) => void;
@@ -95,6 +119,21 @@ interface StaffState {
     | { kind: 'sla_breach'; taskId: string }
     | { kind: 'status'; taskId: string; status: TaskStatus }
   ) => void;
+  setOnShift: (on: boolean) => void;
+  resetShift: () => void;
+
+  // Bridge: a guest just created an order — upsert it as a task without echoing.
+  ingestGuestOrder: (task: StaffTask) => void;
+  // Bridge: guest-side simulation advanced an order — update local task silently.
+  applyBridgeStatus: (taskId: string, status: TaskStatus) => void;
+
+  // Cross-department escalation
+  escalateTask: (taskId: string, toRole: string, reason: string, fromRole: string) => void;
+
+  // Negative feedback from the guest app surfacing to managers.
+  negativeFeedback: NegativeFeedbackPing[];
+  pushNegativeFeedback: (ping: Omit<NegativeFeedbackPing, 'id' | 'acknowledged'>) => void;
+  acknowledgeNegativeFeedback: (id: string) => void;
 }
 
 const TIERS: Array<StaffTask['guest']['loyaltyTier']> = ['BRONZE', 'SILVER', 'GOLD', 'PLATINUM'];
@@ -252,6 +291,27 @@ export const useStaffStore = create<StaffState>((set, get) => ({
   isLoading: false,
   error: null,
   filter: { type: 'all', mine: false },
+  onShift: true,
+  shiftStartedAt: new Date().toISOString(),
+  completedTodayIds: [],
+  negativeFeedback: [],
+
+  setOnShift: (on) =>
+    set({
+      onShift: on,
+      shiftStartedAt: on ? new Date().toISOString() : null,
+    }),
+
+  resetShift: () =>
+    set({
+      onShift: false,
+      shiftStartedAt: null,
+      completedTodayIds: [],
+      tasks: [],
+      guestProfiles: {},
+      briefs: {},
+      negativeFeedback: [],
+    }),
 
   fetchTasks: async () => {
     set({ isLoading: true, error: null });
@@ -271,8 +331,24 @@ export const useStaffStore = create<StaffState>((set, get) => ({
     // Optimistic update
     const prev = get().tasks;
     set({
-      tasks: prev.map((t) => (t.id === taskId ? { ...t, status } : t)),
+      tasks: prev.map((t) =>
+        t.id === taskId
+          ? {
+              ...t,
+              status,
+              ...(opts?.notes ? { notes: opts.notes } : {}),
+              ...(opts?.completionPhotoUrl ? { completionPhotoUrl: opts.completionPhotoUrl } : {}),
+            }
+          : t,
+      ),
     });
+    // Bridge: push the status change back to the guest's order view (no-op in
+    // pure backend mode since the server would broadcast it anyway).
+    try {
+      bridgeStatusToGuest(taskId, status);
+    } catch {
+      // bridge is best-effort
+    }
     try {
       await ordersApi.patch(`/orders/${taskId}/status`, {
         status,
@@ -283,7 +359,73 @@ export const useStaffStore = create<StaffState>((set, get) => ({
       // Keep the optimistic update for demo mode; surface the error softly.
       set({ error: err instanceof Error ? err.message : 'Status update failed (offline mode)' });
     }
+    if (status === 'completed') {
+      const ids = get().completedTodayIds;
+      if (!ids.includes(taskId)) set({ completedTodayIds: [...ids, taskId] });
+    }
     // Remove completed/cancelled from active list after a beat.
+    if (status === 'completed' || status === 'cancelled') {
+      setTimeout(() => {
+        set({ tasks: get().tasks.filter((t) => t.id !== taskId) });
+      }, 1500);
+    }
+  },
+
+  ingestGuestOrder: (task) => {
+    const list = get().tasks;
+    const existing = list.findIndex((t) => t.id === task.id);
+    if (existing >= 0) {
+      const merged = { ...list[existing]!, ...task };
+      const next = [...list];
+      next[existing] = merged;
+      set({ tasks: next });
+      return;
+    }
+    set({ tasks: [task, ...list] });
+  },
+
+  escalateTask: (taskId, toRole, reason, fromRole) => {
+    const list = get().tasks;
+    const idx = list.findIndex((t) => t.id === taskId);
+    if (idx < 0) return;
+    const at = new Date().toISOString();
+    const next = [...list];
+    next[idx] = {
+      ...next[idx]!,
+      priority: 'high',
+      assignedToMe: false,
+      assignedStaffId: null,
+      status: next[idx]!.status === 'completed' ? next[idx]!.status : 'pending',
+      escalation: { taskId, fromRole, toRole, reason, at },
+    };
+    set({ tasks: next });
+  },
+
+  pushNegativeFeedback: (ping) => {
+    const list = get().negativeFeedback;
+    const id = `nf-${ping.reservationId}-${Date.now()}`;
+    set({ negativeFeedback: [{ ...ping, id, acknowledged: false }, ...list].slice(0, 50) });
+  },
+
+  acknowledgeNegativeFeedback: (id) =>
+    set({
+      negativeFeedback: get().negativeFeedback.map((n) =>
+        n.id === id ? { ...n, acknowledged: true } : n,
+      ),
+    }),
+
+  applyBridgeStatus: (taskId, status) => {
+    const list = get().tasks;
+    const idx = list.findIndex((t) => t.id === taskId);
+    if (idx < 0) return;
+    if (list[idx]!.status === status) return;
+    const next = [...list];
+    next[idx] = { ...next[idx]!, status };
+    set({ tasks: next });
+    if (status === 'completed') {
+      const ids = get().completedTodayIds;
+      if (!ids.includes(taskId)) set({ completedTodayIds: [...ids, taskId] });
+    }
     if (status === 'completed' || status === 'cancelled') {
       setTimeout(() => {
         set({ tasks: get().tasks.filter((t) => t.id !== taskId) });

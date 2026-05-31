@@ -13,19 +13,24 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { useAuthStore } from '../../src/stores/auth.store';
+import { canSeeAlerts } from '../../src/lib/staffRoles';
 import { Luxe, LuxeFonts } from '../../src/theme/luxe';
 
-type StaffTab = 'tasks' | 'guests' | 'alerts';
+type StaffTab = 'home' | 'tasks' | 'guests' | 'analytics' | 'alerts';
 
 const ICONS: Record<StaffTab, keyof typeof Ionicons.glyphMap> = {
+  home: 'home-outline',
   tasks: 'list-outline',
   guests: 'people-outline',
+  analytics: 'pulse-outline',
   alerts: 'notifications-outline',
 };
 
 const LABELS: Record<StaffTab, string> = {
+  home: 'Shift',
   tasks: 'Tasks',
   guests: 'Guests',
+  analytics: 'Live',
   alerts: 'Alerts',
 };
 
@@ -98,6 +103,8 @@ export default function StaffLayout() {
   if (!isAuthenticated) return <Redirect href="/(auth)/splash" />;
   if (!staffUser) return <Redirect href="/(app)/home" />;
 
+  const showAlerts = canSeeAlerts(staffUser.role);
+
   return (
     <Tabs
       screenOptions={{
@@ -106,9 +113,11 @@ export default function StaffLayout() {
       }}
       tabBar={(props) => <StaffDock {...props} />}
     >
+      <Tabs.Screen name="home" />
       <Tabs.Screen name="tasks" />
       <Tabs.Screen name="guests" />
-      <Tabs.Screen name="alerts" />
+      <Tabs.Screen name="analytics" options={{ href: showAlerts ? undefined : null }} />
+      <Tabs.Screen name="alerts" options={{ href: showAlerts ? undefined : null }} />
       <Tabs.Screen name="task" options={{ href: null }} />
       <Tabs.Screen name="guest" options={{ href: null }} />
     </Tabs>

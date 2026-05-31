@@ -10,6 +10,7 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Image as ExpoImage } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Circle, Defs, LinearGradient as SvgGradient, Stop } from 'react-native-svg';
 import { Ionicons } from '@expo/vector-icons';
@@ -19,6 +20,7 @@ import { useLuxeFonts } from '../../src/lib/useLuxeFonts';
 import { Luxe, LuxeFonts } from '../../src/theme/luxe';
 import { useOrdersStore, type Order } from '../../src/stores/orders.store';
 import { useReservationStore } from '../../src/stores/reservation.store';
+import { useContentStore } from '../../src/stores/content.store';
 
 type IconName = keyof typeof Ionicons.glyphMap;
 
@@ -30,9 +32,10 @@ interface HkService {
   etaMinutes: number;
   price: number;
   type: 'housekeeping' | 'amenity' | 'spa' | 'recreation';
+  image?: number;
 }
 
-const FEATURED: HkService = {
+const FALLBACK_FEATURED: HkService = {
   id: 'hk-makeup',
   name: 'Make up the room',
   desc: 'A full tidy, fresh towels and a reset of the bath — sent as a priority.',
@@ -40,9 +43,10 @@ const FEATURED: HkService = {
   etaMinutes: 30,
   price: 0,
   type: 'housekeeping',
+  image: require('../../assets/maidcare.jpg'),
 };
 
-const NOW_SERVICES: HkService[] = [
+const FALLBACK_NOW_SERVICES: HkService[] = [
   {
     id: 'hk-turndown',
     name: 'Turndown service',
@@ -72,16 +76,16 @@ const NOW_SERVICES: HkService[] = [
   },
 ];
 
-const COMFORTS: HkService[] = [
-  { id: 'am-towels', name: 'Extra towels', desc: 'Bath & hand towels.', icon: 'browsers-outline', etaMinutes: 15, price: 0, type: 'amenity' },
-  { id: 'am-bedding', name: 'Pillows & blankets', desc: 'Additional bedding.', icon: 'bed-outline', etaMinutes: 15, price: 0, type: 'amenity' },
-  { id: 'am-toiletry', name: 'Toiletry kit', desc: 'A forgotten essential.', icon: 'cut-outline', etaMinutes: 15, price: 0, type: 'amenity' },
-  { id: 'am-hangers', name: 'Hangers', desc: 'A set of wooden hangers.', icon: 'shirt-outline', etaMinutes: 15, price: 0, type: 'amenity' },
-  { id: 'am-adapter', name: 'Travel adapter', desc: 'USB-C, Lightning, universal.', icon: 'battery-charging-outline', etaMinutes: 15, price: 0, type: 'amenity' },
-  { id: 'am-water', name: 'Still & sparkling', desc: 'Two bottles, chilled.', icon: 'wine-outline', etaMinutes: 15, price: 0, type: 'amenity' },
+const FALLBACK_COMFORTS: HkService[] = [
+  { id: 'am-towels', name: 'Extra towels', desc: 'Bath & hand towels.', icon: 'browsers-outline', etaMinutes: 15, price: 0, type: 'amenity', image: require('../../assets/towels.jpg') },
+  { id: 'am-bedding', name: 'Pillows & blankets', desc: 'Additional bedding.', icon: 'bed-outline', etaMinutes: 15, price: 0, type: 'amenity', image: require('../../assets/rooms/SuiteRoom1.jpg') },
+  { id: 'am-toiletry', name: 'Toiletry kit', desc: 'A forgotten essential.', icon: 'cut-outline', etaMinutes: 15, price: 0, type: 'amenity', image: require('../../assets/toiletry.jpg') },
+  { id: 'am-hangers', name: 'Hangers', desc: 'A set of wooden hangers.', icon: 'shirt-outline', etaMinutes: 15, price: 0, type: 'amenity', image: require('../../assets/hangers.jpg') },
+  { id: 'am-adapter', name: 'Travel adapter', desc: 'USB-C, Lightning, universal.', icon: 'battery-charging-outline', etaMinutes: 15, price: 0, type: 'amenity', image: require('../../assets/adapter.jpg') },
+  { id: 'am-water', name: 'Still & sparkling', desc: 'Two bottles, chilled.', icon: 'wine-outline', etaMinutes: 15, price: 0, type: 'amenity', image: require('../../assets/bar.webp') },
 ];
 
-const SPA_FEATURED: HkService = {
+const FALLBACK_SPA_FEATURED: HkService = {
   id: 'spa-signature',
   name: 'Signature ritual',
   desc: 'A 90-minute full-body treatment — warm oil, hot stone therapy and a deep-tissue finish. A complete reset.',
@@ -89,9 +93,10 @@ const SPA_FEATURED: HkService = {
   etaMinutes: 90,
   price: 4800,
   type: 'spa',
+  image: require('../../assets/spa.jpg'),
 };
 
-const SPA_SERVICES: HkService[] = [
+const FALLBACK_SPA_SERVICES: HkService[] = [
   { id: 'spa-massage', name: 'Deep tissue massage', desc: 'Full tension release and muscle reset.', icon: 'body-outline', etaMinutes: 60, price: 3200, type: 'spa' },
   { id: 'spa-facial', name: 'Luminous facial', desc: 'Brightening, hydration and a glow finish.', icon: 'sparkles-outline', etaMinutes: 50, price: 2800, type: 'spa' },
   { id: 'spa-steam', name: 'Steam & soak', desc: 'Private steam room, cedar-scented.', icon: 'cloud-outline', etaMinutes: 30, price: 1200, type: 'spa' },
@@ -99,13 +104,13 @@ const SPA_SERVICES: HkService[] = [
   { id: 'spa-yoga', name: 'Private yoga session', desc: 'In-suite or on the terrace at your pace.', icon: 'leaf-outline', etaMinutes: 60, price: 1600, type: 'spa' },
 ];
 
-const RECREATION: HkService[] = [
-  { id: 'rec-pool', name: 'Infinity pool', desc: 'Heated 28° · until 23:00', icon: 'water-outline', etaMinutes: 0, price: 0, type: 'recreation' },
-  { id: 'rec-gym', name: 'Fitness centre', desc: 'Techno Gym equipment · 24/7', icon: 'barbell-outline', etaMinutes: 0, price: 0, type: 'recreation' },
-  { id: 'rec-kids', name: "Kids' play area", desc: 'Supervised · ages 3–12', icon: 'happy-outline', etaMinutes: 0, price: 0, type: 'recreation' },
-  { id: 'rec-tennis', name: 'Tennis court', desc: 'With resident pro on request', icon: 'tennisball-outline', etaMinutes: 60, price: 800, type: 'recreation' },
-  { id: 'rec-rooftop', name: 'Rooftop terrace', desc: 'Open from 17:00 · sunset views', icon: 'sunny-outline', etaMinutes: 0, price: 0, type: 'recreation' },
-  { id: 'rec-library', name: 'Reading lounge', desc: 'Curated library · quiet hours', icon: 'library-outline', etaMinutes: 0, price: 0, type: 'recreation' },
+const FALLBACK_RECREATION: HkService[] = [
+  { id: 'rec-bonfire', name: 'Bonfire in the garden', desc: 'Lit at dusk · blankets & chai', icon: 'flame-outline', etaMinutes: 60, price: 2500, type: 'recreation', image: require('../../assets/bonfire.jpg') },
+  { id: 'rec-gym', name: 'Fitness centre', desc: 'Open daily · 06:00 — 22:00', icon: 'barbell-outline', etaMinutes: 0, price: 0, type: 'recreation', image: require('../../assets/gym.jpg') },
+  { id: 'rec-kids', name: "Kids' play area", desc: 'Supervised · ages 3–12', icon: 'happy-outline', etaMinutes: 0, price: 0, type: 'recreation', image: require('../../assets/kidsplay.jpg') },
+  { id: 'rec-golf', name: 'Mini golf course', desc: 'On the lawn · clubs provided', icon: 'golf-outline', etaMinutes: 20, price: 800, type: 'recreation', image: require('../../assets/golf.webp') },
+  { id: 'rec-garden', name: 'Garden lawn', desc: 'Sundowners & quiet hours', icon: 'leaf-outline', etaMinutes: 0, price: 0, type: 'recreation', image: require('../../assets/garden.webp') },
+  { id: 'rec-indoor', name: 'Indoor games room', desc: 'Carrom · TT · chess · board games', icon: 'game-controller-outline', etaMinutes: 0, price: 0, type: 'recreation', image: require('../../assets/indoorgames.webp') },
 ];
 
 const SLOTS = Array.from({ length: 9 }, (_, i) => {
@@ -147,16 +152,36 @@ function SpaFeaturedCard({
     <Pressable
       onPress={onPress}
       disabled={disabled}
+      unstable_pressDelay={130}
       accessibilityRole="button"
       accessibilityLabel={item.name}
       style={[styles.spaFeatured, disabled && { opacity: 0.4 }]}
     >
-      <LinearGradient
-        colors={['#2A1018', '#1C0A12']}
-        start={{ x: 0.5, y: 0 }}
-        end={{ x: 0.5, y: 1 }}
-        style={[StyleSheet.absoluteFill, { borderRadius: 26 }]}
-      />
+      {item.image ? (
+        <>
+          <ExpoImage
+            source={item.image}
+            style={[StyleSheet.absoluteFill, { borderRadius: 26 }]}
+            contentFit="cover"
+            cachePolicy="memory-disk"
+            priority="high"
+            transition={0}
+            recyclingKey={`hk-${item.id}`}
+          />
+          <LinearGradient
+            colors={['rgba(42,16,24,0.45)', 'rgba(28,10,18,0.85)', '#160814']}
+            locations={[0, 0.6, 1]}
+            style={[StyleSheet.absoluteFill, { borderRadius: 26 }]}
+          />
+        </>
+      ) : (
+        <LinearGradient
+          colors={['#2A1018', '#1C0A12']}
+          start={{ x: 0.5, y: 0 }}
+          end={{ x: 0.5, y: 1 }}
+          style={[StyleSheet.absoluteFill, { borderRadius: 26 }]}
+        />
+      )}
       <LinearGradient
         colors={['rgba(220,120,150,0.22)', 'transparent']}
         locations={[0, 0.75]}
@@ -209,11 +234,30 @@ function RecreationTile({
       onPress={onPress}
       onPressIn={() => setPressed(true)}
       onPressOut={() => setPressed(false)}
+      unstable_pressDelay={130}
       disabled={disabled}
       accessibilityRole="button"
       accessibilityLabel={item.name}
       style={[styles.recTile, disabled && { opacity: 0.4 }, pressed && { transform: [{ scale: 0.96 }] }]}
     >
+      {item.image ? (
+        <>
+          <ExpoImage
+            source={item.image}
+            style={[StyleSheet.absoluteFill, { borderRadius: 20 }]}
+            contentFit="cover"
+            cachePolicy="memory-disk"
+            priority="high"
+            transition={0}
+            recyclingKey={`hk-${item.id}`}
+          />
+          <LinearGradient
+            colors={['rgba(8,7,10,0.30)', 'rgba(8,7,10,0.68)', 'rgba(6,5,8,0.95)']}
+            locations={[0, 0.5, 1]}
+            style={[StyleSheet.absoluteFill, { borderRadius: 20 }]}
+          />
+        </>
+      ) : null}
       <LinearGradient
         colors={['rgba(60,80,140,0.18)', 'transparent']}
         locations={[0, 0.9]}
@@ -251,6 +295,15 @@ export default function HousekeepingScreen() {
   const placing = useOrdersStore((s) => s.placing);
   const activeOrders = useOrdersStore((s) => s.activeOrders);
   const fetchActiveOrders = useOrdersStore((s) => s.fetchActiveOrders);
+  const catalog = useContentStore((s) => s.housekeeping);
+  const fetchHousekeeping = useContentStore((s) => s.fetchHousekeeping);
+
+  const FEATURED = catalog?.featured ?? FALLBACK_FEATURED;
+  const NOW_SERVICES = catalog?.now ?? FALLBACK_NOW_SERVICES;
+  const COMFORTS = catalog?.comforts ?? FALLBACK_COMFORTS;
+  const SPA_FEATURED = catalog?.spaFeatured ?? FALLBACK_SPA_FEATURED;
+  const SPA_SERVICES = catalog?.spa ?? FALLBACK_SPA_SERVICES;
+  const RECREATION = catalog?.recreation ?? FALLBACK_RECREATION;
 
   const [selected, setSelected] = useState<HkService | null>(null);
   const [slot, setSlot] = useState<string | null>(null);
@@ -261,7 +314,8 @@ export default function HousekeepingScreen() {
   useFocusEffect(
     useCallback(() => {
       fetchActiveOrders();
-    }, [fetchActiveOrders]),
+      fetchHousekeeping();
+    }, [fetchActiveOrders, fetchHousekeeping]),
   );
 
   const suite = reservation?.room?.roomNumber ?? '1604';
@@ -553,7 +607,7 @@ export default function HousekeepingScreen() {
 
         {/* ───────── FOOTNOTE ───────── */}
         <View style={styles.footnote}>
-          <Text style={styles.footText}>Hôtel Octave · Housekeeping</Text>
+          <Text style={styles.footText}>Hotel Kodai International · Housekeeping</Text>
           <Text style={styles.footText}>Charged to folio</Text>
         </View>
       </ScrollView>
@@ -1005,17 +1059,37 @@ function FeaturedAction({
       onPress={onPress}
       onPressIn={() => setPressed(true)}
       onPressOut={() => setPressed(false)}
+      unstable_pressDelay={130}
       disabled={disabled}
       accessibilityRole="button"
       accessibilityLabel={item.name}
       style={[styles.featured, disabled && { opacity: 0.4 }, pressed && { transform: [{ scale: 0.97 }] }]}
     >
-      <LinearGradient
-        colors={['#3A2E18', '#241C10']}
-        start={{ x: 0.5, y: 0 }}
-        end={{ x: 0.5, y: 1 }}
-        style={[StyleSheet.absoluteFill, { borderRadius: 26 }]}
-      />
+      {item.image ? (
+        <>
+          <ExpoImage
+            source={item.image}
+            style={[StyleSheet.absoluteFill, { borderRadius: 26 }]}
+            contentFit="cover"
+            cachePolicy="memory-disk"
+            priority="high"
+            transition={0}
+            recyclingKey={`hk-${item.id}`}
+          />
+          <LinearGradient
+            colors={['rgba(58,46,24,0.45)', 'rgba(36,28,16,0.85)', '#1A140C']}
+            locations={[0, 0.6, 1]}
+            style={[StyleSheet.absoluteFill, { borderRadius: 26 }]}
+          />
+        </>
+      ) : (
+        <LinearGradient
+          colors={['#3A2E18', '#241C10']}
+          start={{ x: 0.5, y: 0 }}
+          end={{ x: 0.5, y: 1 }}
+          style={[StyleSheet.absoluteFill, { borderRadius: 26 }]}
+        />
+      )}
       <LinearGradient
         colors={['rgba(244,201,126,0.22)', 'transparent']}
         locations={[0, 0.75]}
@@ -1068,6 +1142,7 @@ function ServiceRow({
       onPress={onPress}
       onPressIn={() => setPressed(true)}
       onPressOut={() => setPressed(false)}
+      unstable_pressDelay={130}
       disabled={disabled}
       accessibilityRole="button"
       accessibilityLabel={item.name}
@@ -1114,11 +1189,30 @@ function ComfortTile({
       onPress={onPress}
       onPressIn={() => setPressed(true)}
       onPressOut={() => setPressed(false)}
+      unstable_pressDelay={130}
       disabled={disabled}
       accessibilityRole="button"
       accessibilityLabel={item.name}
       style={[styles.tile, disabled && { opacity: 0.4 }, pressed && { transform: [{ scale: 0.96 }] }]}
     >
+      {item.image ? (
+        <>
+          <ExpoImage
+            source={item.image}
+            style={[StyleSheet.absoluteFill, { borderRadius: 20 }]}
+            contentFit="cover"
+            cachePolicy="memory-disk"
+            priority="high"
+            transition={0}
+            recyclingKey={`hk-${item.id}`}
+          />
+          <LinearGradient
+            colors={['rgba(8,7,10,0.32)', 'rgba(8,7,10,0.72)', 'rgba(6,5,8,0.95)']}
+            locations={[0, 0.5, 1]}
+            style={[StyleSheet.absoluteFill, { borderRadius: 20 }]}
+          />
+        </>
+      ) : null}
       <LinearGradient
         colors={['rgba(244,201,126,0.10)', 'transparent']}
         locations={[0, 0.9]}

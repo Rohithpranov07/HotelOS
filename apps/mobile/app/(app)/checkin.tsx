@@ -59,7 +59,7 @@ export default function CheckinScreen() {
   };
 
   const titles: Record<1 | 2 | 3, { t: string; s?: string }> = {
-    1: { t: 'Scan your ID', s: 'Hôtel Octave verifies your identity once, privately, and the document is never stored.' },
+    1: { t: 'Scan your ID', s: 'Hotel Kodai International verifies your identity once, privately, and the document is never stored.' },
     2: { t: 'Set your preferences', s: 'Your suite will be tuned to taste before you arrive.' },
     3: { t: 'Confirm your arrival', s: 'A last glance before your key activates.' },
   };

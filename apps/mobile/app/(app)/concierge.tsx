@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useVoiceInput } from '../../src/lib/useVoiceInput';
 import {
   Keyboard,
   Platform,
@@ -6,6 +7,7 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -14,6 +16,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { Luxe, LuxeFonts } from '../../src/theme/luxe';
 import { useLuxeFonts } from '../../src/lib/useLuxeFonts';
+import { PremiumScreen } from '../../src/components/luxe/PremiumScreen';
 import { useAuthStore } from '../../src/stores/auth.store';
 import { useReservationStore } from '../../src/stores/reservation.store';
 import {
@@ -22,7 +25,7 @@ import {
   type ConciergeMessage,
 } from '../../src/stores/concierge.store';
 import { useOrdersStore, type CartItem } from '../../src/stores/orders.store';
-import { DEMO_RESERVATION } from '../../src/lib/demo';
+import { DEMO_RESERVATION, DEMO_GUEST } from '../../src/lib/demo';
 import { subscribeConcierge } from '../../src/lib/socket';
 import { ConciergeOrb } from '../../src/components/concierge/ConciergeOrb';
 import {
@@ -41,12 +44,12 @@ import { ChatInput } from '../../src/components/concierge/ChatInput';
 import { EscalationModal } from '../../src/components/concierge/EscalationModal';
 
 const DEFAULT_SUGGESTIONS: SuggestionItem[] = [
-  { kicker: 'Suite', title: 'Order dinner', tone: 'amber' },
-  { kicker: 'Wellness', title: 'Book the spa', tone: 'bronze' },
-  { kicker: 'Stay', title: 'Late check-out', tone: 'ink' },
-  { kicker: 'Linen', title: 'Fresh towels', tone: 'ivory' },
-  { kicker: 'Edit', title: 'Quiet rooftop dining', tone: 'amber' },
-  { kicker: 'Transport', title: 'Airport car at dawn', tone: 'bronze' },
+  { kicker: 'Dining', title: 'Order dinner to the room', tone: 'amber', backgroundImage: require('../../assets/restraunt.jpg') },
+  { kicker: 'Explore', title: "Cab to Coaker's Walk", tone: 'bronze', backgroundImage: require('../../assets/Coakers.jpg') },
+  { kicker: 'Stay', title: 'Late check-out request', tone: 'ink', backgroundImage: require('../../assets/housekeeping.jpg') },
+  { kicker: 'Suite', title: 'Fresh towels please', tone: 'ivory', backgroundImage: require('../../assets/spa.jpg') },
+  { kicker: 'Tonight', title: 'Bonfire on the lawn', tone: 'amber', backgroundImage: require('../../assets/bonfire.jpg') },
+  { kicker: 'Transport', title: 'Madurai airport drop', tone: 'bronze', backgroundImage: require('../../assets/facade.jpg') },
 ];
 
 const TONES: SuggestionTone[] = ['amber', 'bronze', 'ink', 'ivory'];
@@ -54,7 +57,8 @@ const TONES: SuggestionTone[] = ['amber', 'bronze', 'ink', 'ivory'];
 export default function ConciergeScreen() {
   useLuxeFonts();
   const router = useRouter();
-  const guest = useAuthStore((s) => s.guest);
+  const liveGuest = useAuthStore((s) => s.guest);
+  const guest = liveGuest ?? DEMO_GUEST;
   const liveReservation = useReservationStore((s) => s.reservation);
   const fetchActiveReservation = useReservationStore((s) => s.fetchActiveReservation);
   const reservation = liveReservation ?? DEMO_RESERVATION;
@@ -76,8 +80,14 @@ export default function ConciergeScreen() {
   const placeOrder = useOrdersStore((s) => s.placeOrder);
 
   const [input, setInput] = useState('');
-  const [voiceActive, setVoiceActive] = useState(false);
   const [kbHeight, setKbHeight] = useState(0);
+  const inputRef = useRef<TextInput | null>(null);
+
+  const { isRecording, isTranscribing, voiceError, toggle: toggleVoice } = useVoiceInput(
+    useCallback((text: string) => { setInput(text); }, []),
+    inputRef,
+  );
+
   const scrollRef = useRef<ScrollView | null>(null);
 
   useEffect(() => {
@@ -101,8 +111,8 @@ export default function ConciergeScreen() {
 
   useEffect(() => {
     if (!hydrated) return;
-    hydrateGreeting(guest?.fullName?.split(' ')[0]);
-  }, [hydrated, guest?.fullName, hydrateGreeting]);
+    hydrateGreeting(guest.fullName.split(' ')[0]);
+  }, [hydrated, guest.fullName, hydrateGreeting]);
 
   useEffect(() => {
     if (!reservation.id) return;
@@ -134,13 +144,14 @@ export default function ConciergeScreen() {
 
   const guestProfile = useMemo(
     () => ({
-      guest_id: guest?.id ?? 'demo-guest',
-      first_name: guest?.fullName?.split(' ')[0] ?? 'Rohith',
-      loyalty_tier: guest?.loyaltyTier ?? 'PLATINUM',
-      loyalty_points: guest?.loyaltyPoints ?? 12450,
-      room_number: reservation.room?.roomNumber ?? '1604',
-      hotel_name: 'Hôtel Octave',
-      property_id: 'demo-property',
+      guest_id: guest.id,
+      first_name: guest.fullName.split(' ')[0],
+      full_name: guest.fullName,
+      loyalty_tier: guest.loyaltyTier,
+      loyalty_points: guest.loyaltyPoints,
+      room_number: reservation.room?.roomNumber ?? 'Not checked in',
+      hotel_name: 'Kodai International',
+      property_id: 'kodai-international',
     }),
     [guest, reservation.room?.roomNumber],
   );
@@ -150,7 +161,6 @@ export default function ConciergeScreen() {
       const text = (textArg ?? input).trim();
       if (!text) return;
       setInput('');
-      setVoiceActive(false);
       await sendMessage(text, reservation.id, guestProfile);
     },
     [input, sendMessage, reservation.id, guestProfile],
@@ -214,15 +224,17 @@ export default function ConciergeScreen() {
         kicker: kickerFor(title),
         title,
         tone: TONES[i % TONES.length],
+        backgroundImage: imageForSuggestion(title),
       }))
     : DEFAULT_SUGGESTIONS;
 
   const showSuggestionRail = !isTyping;
   const checkoutDay = dayLabel(reservation);
-  const firstName = guest?.fullName?.split(' ')[0] ?? 'Guest';
+  const firstName = guest.fullName.split(' ')[0];
 
   return (
     <View style={styles.root}>
+      <PremiumScreen>
       <Atmosphere />
       <SafeAreaView style={{ flex: 1 }} edges={['top']}>
         <View style={{ flex: 1 }}>
@@ -277,11 +289,14 @@ export default function ConciergeScreen() {
             pointerEvents="box-none"
           >
             <ChatInput
+              inputRef={inputRef}
               value={input}
               onChangeText={setInput}
               onSend={() => handleSend()}
-              onVoice={() => setVoiceActive((v) => !v)}
-              voiceActive={voiceActive}
+              onVoice={toggleVoice}
+              isRecording={isRecording}
+              isTranscribing={isTranscribing}
+              voiceError={voiceError}
             />
           </View>
         </View>
@@ -292,6 +307,7 @@ export default function ConciergeScreen() {
         onConnect={() => requestHuman(reservation.id)}
         onContinue={dismissEscalation}
       />
+      </PremiumScreen>
     </View>
   );
 }
@@ -399,9 +415,14 @@ function formatTime(ts: number): string {
 }
 
 function tierLabel(t?: string): string {
-  if (!t) return 'Obsidian';
-  if (t === 'PLATINUM') return 'Obsidian';
-  return t.charAt(0) + t.slice(1).toLowerCase();
+  if (!t) return 'Bronze';
+  const map: Record<string, string> = {
+    PLATINUM: 'Obsidian',
+    GOLD: 'Gold',
+    SILVER: 'Silver',
+    BRONZE: 'Bronze',
+  };
+  return map[t] ?? (t.charAt(0) + t.slice(1).toLowerCase());
 }
 
 function dayLabel(r: { checkInDate: string; checkOutDate: string }): string {
@@ -416,15 +437,74 @@ function dayLabel(r: { checkInDate: string; checkOutDate: string }): string {
   return `${elapsed}/${total}`;
 }
 
+function imageForSuggestion(title: string): number {
+  const t = title.toLowerCase();
+
+  // ── Explore / Nature ──────────────────────────────────────────
+  if (t.includes('coaker')) return require('../../assets/Coakers.jpg');
+  if (t.includes('bryant')) return require('../../assets/Bryantpark.jpg');
+  if (t.includes('pillar')) return require('../../assets/pillarrocks.jpg');
+  if (t.includes('berijam')) return require('../../assets/Berijam.jpg');
+  if (t.includes('silver') || t.includes('cascade') || t.includes('falls')) return require('../../assets/Silvercascade.jpg');
+  if (t.includes('kuruji')) return require('../../assets/Kuruji.jpg');
+  if (t.includes('lake')) return require('../../assets/lake.jpg');
+  if (t.includes('walk') || t.includes('hike') || t.includes('cliff') || t.includes('trek') || t.includes('sunrise') || t.includes('sunset')) return require('../../assets/Coakers.jpg');
+
+  // ── Experiences ───────────────────────────────────────────────
+  if (t.includes('bonfire') || t.includes('fire')) return require('../../assets/bonfire.jpg');
+  if (t.includes('golf')) return require('../../assets/golf.webp');
+  if (t.includes('carrom') || t.includes('chess') || t.includes('table tennis') || t.includes('indoor game') || t.includes('board game') || t.includes('game')) return require('../../assets/indoorgames.webp');
+  if (t.includes('garden') || t.includes('lawn')) return require('../../assets/garden.webp');
+  if (t.includes('gym') || t.includes('fitness') || t.includes('workout') || t.includes('run')) return require('../../assets/gym.jpg');
+  if (t.includes('kid') || t.includes('child') || t.includes('play area')) return require('../../assets/kidsplay.jpg');
+
+  // ── Wellness ──────────────────────────────────────────────────
+  if (t.includes('spa') || t.includes('massage') || t.includes('sauna') || t.includes('onsen') || t.includes('steam') || t.includes('ritual')) return require('../../assets/spa.jpg');
+  if (t.includes('yoga') || t.includes('meditat')) return require('../../assets/spa.jpg');
+
+  // ── Food & Dining ─────────────────────────────────────────────
+  if (t.includes('breakfast') || t.includes('brunch') || t.includes('morning') || t.includes('idli') || t.includes('dosa') || t.includes('filter coffee') || t.includes('coffee') || t.includes('tea')) return require('../../assets/dining.webp');
+  if (t.includes('bar') || t.includes('cocktail') || t.includes('wine') || t.includes('beer') || t.includes('drink') || t.includes('cellar')) return require('../../assets/bar.webp');
+  if (t.includes('chef') || t.includes('tasting') || t.includes('kitchen') || t.includes('biryani') || t.includes('rogan') || t.includes('makhani') || t.includes('prawn') || t.includes('tandoori') || t.includes('tikka')) return require('../../assets/Smess.jpg');
+  if (t.includes('order') || t.includes('dinner') || t.includes('lunch') || t.includes('food') || t.includes('menu') || t.includes('restaurant') || t.includes('suite service') || t.includes('room service') || t.includes('orchard') || t.includes('curry') || t.includes('naan') || t.includes('paneer') || t.includes('dessert') || t.includes('cake') || t.includes('salad') || t.includes('soup')) return require('../../assets/restraunt.jpg');
+
+  // ── Housekeeping & Linen ──────────────────────────────────────
+  if (t.includes('towel')) return require('../../assets/towels.jpg');
+  if (t.includes('linen') || t.includes('bed') || t.includes('sheet') || t.includes('pillow') || t.includes('blanket') || t.includes('sleep')) return require('../../assets/bedding.jpg');
+  if (t.includes('housekeep') || t.includes('turndown') || t.includes('clean') || t.includes('refresh') || t.includes('maid')) return require('../../assets/housekeeping.jpg');
+  if (t.includes('check-out') || t.includes('checkout') || t.includes('late check')) return require('../../assets/housekeeping.jpg');
+
+  // ── Laundry & Valet ───────────────────────────────────────────
+  if (t.includes('laundry') || t.includes('dry clean') || t.includes('press') || t.includes('iron') || t.includes('valet') || t.includes('shoe shine') || t.includes('robe') || t.includes('slipper')) return require('../../assets/hangers.jpg');
+
+  // ── Amenities ─────────────────────────────────────────────────
+  if (t.includes('toiletry') || t.includes('groomin') || t.includes('razor') || t.includes('dental') || t.includes('kit')) return require('../../assets/toiletry.jpg');
+  if (t.includes('charger') || t.includes('adapter') || t.includes('wifi') || t.includes('tv') || t.includes('device') || t.includes('tablet')) return require('../../assets/adapter.jpg');
+  if (t.includes('water') || t.includes('sparkling') || t.includes('still water') || t.includes('beverage')) return require('../../assets/water.jpg');
+
+  // ── Transport & Hotel ─────────────────────────────────────────
+  if (t.includes('cab') || t.includes('taxi') || t.includes('car') || t.includes('airport') || t.includes('transport') || t.includes('shuttle') || t.includes('drop') || t.includes('pickup') || t.includes('transfer')) return require('../../assets/facade.jpg');
+  if (t.includes('map') || t.includes('hotel') || t.includes('property') || t.includes('reception') || t.includes('lobby') || t.includes('check-in') || t.includes('checkin')) return require('../../assets/facade.jpg');
+
+  // ── Fallback ──────────────────────────────────────────────────
+  return require('../../assets/restraunt.jpg');
+}
+
 function kickerFor(title: string): string {
   const t = title.toLowerCase();
-  if (t.includes('order') || t.includes('food') || t.includes('dinner') || t.includes('breakfast')) return 'Suite';
-  if (t.includes('spa') || t.includes('onsen') || t.includes('massage')) return 'Wellness';
-  if (t.includes('check')) return 'Stay';
-  if (t.includes('car') || t.includes('airport') || t.includes('transport')) return 'Transport';
-  if (t.includes('linen') || t.includes('towel') || t.includes('housekeep')) return 'Linen';
-  if (t.includes('track')) return 'Order';
-  return 'Edit';
+  if (t.includes('breakfast') || t.includes('brunch') || t.includes('morning') || t.includes('coffee') || t.includes('tea')) return 'Morning';
+  if (t.includes('order') || t.includes('dinner') || t.includes('lunch') || t.includes('food') || t.includes('menu') || t.includes('biryani') || t.includes('curry') || t.includes('prawn') || t.includes('tikka') || t.includes('naan') || t.includes('paneer') || t.includes('soup') || t.includes('salad') || t.includes('dessert')) return 'Dining';
+  if (t.includes('bar') || t.includes('cocktail') || t.includes('wine') || t.includes('drink')) return 'Cellar';
+  if (t.includes('spa') || t.includes('massage') || t.includes('sauna') || t.includes('yoga') || t.includes('wellness')) return 'Wellness';
+  if (t.includes('gym') || t.includes('fitness') || t.includes('workout')) return 'Fitness';
+  if (t.includes('bonfire') || t.includes('golf') || t.includes('game') || t.includes('garden') || t.includes('lawn') || t.includes('kid') || t.includes('activity')) return 'Tonight';
+  if (t.includes('coaker') || t.includes('bryant') || t.includes('pillar') || t.includes('berijam') || t.includes('lake') || t.includes('walk') || t.includes('hike') || t.includes('falls')) return 'Explore';
+  if (t.includes('towel') || t.includes('linen') || t.includes('bed') || t.includes('pillow') || t.includes('blanket') || t.includes('housekeep') || t.includes('turndown') || t.includes('clean')) return 'Suite';
+  if (t.includes('laundry') || t.includes('dry clean') || t.includes('press') || t.includes('robe')) return 'Valet';
+  if (t.includes('check-out') || t.includes('checkout') || t.includes('late check') || t.includes('check-in')) return 'Stay';
+  if (t.includes('cab') || t.includes('taxi') || t.includes('car') || t.includes('airport') || t.includes('transfer') || t.includes('shuttle')) return 'Transport';
+  if (t.includes('charger') || t.includes('adapter') || t.includes('wifi') || t.includes('toiletry') || t.includes('water') || t.includes('amenity')) return 'Amenity';
+  return 'Suite';
 }
 
 const styles = StyleSheet.create({

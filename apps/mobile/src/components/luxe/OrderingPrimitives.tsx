@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { Pressable, StyleSheet, Text, View, type ViewStyle } from 'react-native';
+import { Image, Pressable, StyleSheet, Text, View, type ViewStyle } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -78,16 +78,24 @@ export function FoodImage({
   tone = 'amber',
   showRing = false,
   showLabel = true,
+  imageUrl,
   style,
 }: {
   tone?: FoodTone;
   showRing?: boolean;
   showLabel?: boolean;
+  imageUrl?: string | null;
   style?: ViewStyle;
 }) {
   const p = FOOD_PALETTE[tone];
   return (
     <View style={[StyleSheet.absoluteFill, { backgroundColor: p.base, overflow: 'hidden' }, style]}>
+      {imageUrl ? (
+        <Image
+          source={{ uri: imageUrl }}
+          style={[StyleSheet.absoluteFill, { resizeMode: 'cover' }]}
+        />
+      ) : null}
       {/* diagonal stripe wash via stacked gradients */}
       <LinearGradient
         colors={[p.stripe, 'transparent', p.stripe, 'transparent']}
@@ -146,7 +154,7 @@ export function FoodImage({
           </View>
         </>
       )}
-      {showLabel && (
+      {showLabel && !imageUrl && (
         <Text
           style={{
             position: 'absolute',
@@ -762,6 +770,7 @@ export function ChefsPick({
   tags,
   priceLabel,
   price,
+  imageUrl,
   onAdd,
   onFavorite,
   tone = 'bronze',
@@ -774,6 +783,7 @@ export function ChefsPick({
   tags: string[];
   priceLabel: string;
   price: string;
+  imageUrl?: string | null;
   onAdd?: () => void;
   onFavorite?: () => void;
   tone?: FoodTone;
@@ -782,7 +792,7 @@ export function ChefsPick({
     <View style={chefStyles.wrap}>
       {/* image area */}
       <View style={chefStyles.imgArea}>
-        <FoodImage tone={tone} showRing showLabel={false} />
+        <FoodImage tone={tone} showRing={!imageUrl} showLabel={false} imageUrl={imageUrl} />
         {/* badge */}
         <View style={chefStyles.badge}>
           <LinearGradient
@@ -963,6 +973,7 @@ export function MenuItem({
   time,
   tone = 'amber',
   qty = 0,
+  imageUrl,
   onAdd,
   onStep,
   onPress,
@@ -976,12 +987,13 @@ export function MenuItem({
   time: string;
   tone?: FoodTone;
   qty?: number;
+  imageUrl?: string | null;
   onAdd?: () => void;
   onStep?: (n: number) => void;
   onPress?: () => void;
 }) {
   return (
-    <Pressable onPress={onPress} style={menuStyles.row}>
+    <Pressable onPress={onPress} unstable_pressDelay={130} style={menuStyles.row}>
       <View style={{ flex: 1, minWidth: 0, paddingRight: 14 }}>
         {kicker ? <Text style={menuStyles.kicker}>{kicker.toUpperCase()}</Text> : null}
         <Text style={menuStyles.name}>
@@ -1017,7 +1029,7 @@ export function MenuItem({
         </View>
       </View>
       <View style={menuStyles.imgSlot}>
-        <FoodImage tone={tone} />
+        <FoodImage tone={tone} imageUrl={imageUrl} />
       </View>
     </Pressable>
   );
@@ -1105,6 +1117,7 @@ export function PairingCard({
   region,
   year,
   price,
+  imageUrl,
   tone = 'crimson',
 }: {
   kicker: string;
@@ -1112,25 +1125,28 @@ export function PairingCard({
   region: string;
   year: string;
   price: string;
+  imageUrl?: string | null;
   tone?: FoodTone;
 }) {
   return (
     <View style={pairingStyles.card}>
-      <FoodImage tone={tone} showLabel={false} />
+      <FoodImage tone={tone} showLabel={false} imageUrl={imageUrl} />
       <LinearGradient
         colors={['rgba(8,7,10,0.10)', 'rgba(8,7,10,0.92)']}
         locations={[0.3, 1]}
         style={StyleSheet.absoluteFill}
       />
-      {/* bottle silhouette */}
-      <View style={pairingStyles.bottle}>
-        <View style={pairingStyles.bottleLabel}>
-          <LinearGradient
-            colors={['rgba(244,201,126,0.18)', 'rgba(139,111,71,0.10)']}
-            style={StyleSheet.absoluteFill}
-          />
+      {/* bottle silhouette — only shown when no real image */}
+      {!imageUrl && (
+        <View style={pairingStyles.bottle}>
+          <View style={pairingStyles.bottleLabel}>
+            <LinearGradient
+              colors={['rgba(244,201,126,0.18)', 'rgba(139,111,71,0.10)']}
+              style={StyleSheet.absoluteFill}
+            />
+          </View>
         </View>
-      </View>
+      )}
       <Text style={pairingStyles.kicker}>{kicker.toUpperCase()}</Text>
       <View style={pairingStyles.foot}>
         <Text style={pairingStyles.name}>{name}</Text>

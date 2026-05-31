@@ -147,6 +147,7 @@ export default function DiningScreen() {
       quantity: 1,
       unitPrice: item.price,
       notes: '',
+      imageUrl: item.imageUrl,
     });
   };
 
@@ -287,6 +288,7 @@ export default function DiningScreen() {
                         time={`${it.prepTimeMinutes} min`}
                         tone={toneFor(it.id)}
                         qty={qtyFor(it.id)}
+                        imageUrl={it.imageUrl}
                         onAdd={() => handleAdd(it)}
                         onStep={(n) => updateCartItem(it.id, n)}
                         onPress={() => setDetailItem(it)}
@@ -363,6 +365,7 @@ export default function DiningScreen() {
               priceLabel="For two"
               price={`₹${(chefsPickItem.price * 2).toFixed(0)}`}
               tone="bronze"
+              imageUrl={chefsPickItem.imageUrl}
               onAdd={() => handleAdd(chefsPickItem)}
             />
           </View>
@@ -400,6 +403,7 @@ export default function DiningScreen() {
                       time={`${it.prepTimeMinutes} min`}
                       tone={toneFor(it.id)}
                       qty={qtyFor(it.id)}
+                      imageUrl={it.imageUrl}
                       onAdd={() => handleAdd(it)}
                       onStep={(n) => updateCartItem(it.id, n)}
                       onPress={() => setDetailItem(it)}
@@ -433,6 +437,7 @@ export default function DiningScreen() {
                   year="2019"
                   price={`₹${p.price.toFixed(0)}`}
                   tone={toneFor(p.id)}
+                  imageUrl={p.imageUrl}
                 />
               ))}
             </ScrollView>
@@ -482,6 +487,7 @@ export default function DiningScreen() {
                 prepTimeMinutes: detailItem.prepTimeMinutes,
                 dietaryTags: detailItem.dietaryTags,
                 allergens: detailItem.allergens,
+                imageUrl: detailItem.imageUrl,
                 tone: toneFor(detailItem.id),
               }
             : null
@@ -501,6 +507,7 @@ export default function DiningScreen() {
               quantity: qty,
               unitPrice: detailItem.price,
               notes,
+              imageUrl: detailItem.imageUrl,
             });
           }
           setDetailItem(null);
