@@ -20,20 +20,9 @@ import { useLuxeFonts } from '../../src/lib/useLuxeFonts';
 import { Luxe, LuxeFonts } from '../../src/theme/luxe';
 import { useOrdersStore, type Order } from '../../src/stores/orders.store';
 import { useReservationStore } from '../../src/stores/reservation.store';
-import { useContentStore } from '../../src/stores/content.store';
+import { useContentStore, type HkService } from '../../src/stores/content.store';
 
 type IconName = keyof typeof Ionicons.glyphMap;
-
-interface HkService {
-  id: string;
-  name: string;
-  desc: string;
-  icon: IconName;
-  etaMinutes: number;
-  price: number;
-  type: 'housekeeping' | 'amenity' | 'spa' | 'recreation';
-  image?: number;
-}
 
 const FALLBACK_FEATURED: HkService = {
   id: 'hk-makeup',

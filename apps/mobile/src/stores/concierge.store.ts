@@ -349,7 +349,10 @@ function guestName(gp: Record<string, unknown>): string {
 function findMenuItem(msg: string): [string, { price: number; eta: number; note: string }] | null {
   const m = msg.toLowerCase();
   for (const key of Object.keys(MENU).sort((a, b) => b.length - a.length)) {
-    if (m.includes(key)) return [key, MENU[key]];
+    if (m.includes(key)) {
+      const entry = MENU[key];
+      if (entry) return [key, entry];
+    }
   }
   return null;
 }

@@ -1,15 +1,18 @@
 import { create } from 'zustand';
+import type { Ionicons } from '@expo/vector-icons';
 import { bookingApi, ordersApi } from '../lib/api';
 import { resolveAsset } from '../lib/assetMap';
 
 /* ─── Housekeeping catalog ─────────────────────────────────────── */
 export type HkServiceType = 'housekeeping' | 'amenity' | 'spa' | 'recreation';
 
+export type HkIconName = keyof typeof Ionicons.glyphMap;
+
 export interface HkService {
   id: string;
   name: string;
   desc: string;
-  icon: string;
+  icon: HkIconName;
   etaMinutes: number;
   price: number;
   type: HkServiceType;
@@ -30,7 +33,9 @@ function hkFromApi(raw: Record<string, unknown>): HkService {
     id: String(raw.id),
     name: String(raw.name),
     desc: String(raw.desc),
-    icon: String(raw.icon),
+    // The API returns an Ionicons glyph name; the catalog is curated, so we
+    // trust the string and surface it as the typed icon key.
+    icon: String(raw.icon) as HkIconName,
     etaMinutes: Number(raw.eta_minutes ?? 0),
     price: Number(raw.price ?? 0),
     type: (raw.type as HkServiceType) ?? 'housekeeping',

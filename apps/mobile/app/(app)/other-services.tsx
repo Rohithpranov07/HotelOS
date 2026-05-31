@@ -407,6 +407,16 @@ const EXPERIENCES: Experience[] = [
 
 // ─── MAIN SCREEN ───────────────────────────────────────────────────────────────
 
+// Sibling subcomponents (HeroSection, MapSection, SaveAndPlanSection) all need
+// the live-or-fallback spots list. Expose it as a hook so each can subscribe
+// without prop-drilling.
+function useSpots(): Spot[] {
+  const apiAttractions = useContentStore((s) => s.attractions);
+  return apiAttractions && apiAttractions.length > 0
+    ? attractionsToSpots(apiAttractions)
+    : FALLBACK_SPOTS;
+}
+
 function attractionsToSpots(items: Attraction[]): Spot[] {
   return items.map((a) => ({
     id: a.id,
@@ -555,6 +565,7 @@ function HeroSection() {
     label: 'Cool, pine mist',
   });
   const plannedCount = usePlanStore((s) => s.spotIds.length);
+  const spotsCount = useSpots().length;
 
   const conciergeRec =
     hour < 12
@@ -625,7 +636,7 @@ function HeroSection() {
 
       {/* Stat strip */}
       <View style={styles.statStrip}>
-        <HeroStat value={String(SPOTS.length)} label="Spots curated" />
+        <HeroStat value={String(spotsCount)} label="Spots curated" />
         <View style={styles.statDivider} />
         <HeroStat value={String(plannedCount)} label="In your plan" />
         <View style={styles.statDivider} />
@@ -970,6 +981,7 @@ function ThreeDMapModal({ visible, onClose }: { visible: boolean; onClose: () =>
 
 function MapSection() {
   const [mapModalVisible, setMapModalVisible] = useState(false);
+  const SPOTS = useSpots();
   const mapW = SW - 48;
   const hx = mapW * 0.44;
   const hy = 108;
@@ -1344,6 +1356,7 @@ function ExperiencesRail({ onBook }: { onBook: (p: ServiceBookingPayload) => voi
 function SaveAndPlanSection() {
   const plannedIds = usePlanStore((s) => s.spotIds);
   const clearPlan = usePlanStore((s) => s.clearPlan);
+  const SPOTS = useSpots();
   const plannedSpots = SPOTS.filter((s) => plannedIds.includes(s.id));
   const count = plannedSpots.length;
 
