@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Animated,
+  Linking,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -236,10 +237,27 @@ export default function TrackOrderScreen() {
                     {order.assigned_staff.role.toUpperCase()}
                   </Text>
                 </View>
-                <Pressable style={styles.iconBtn} hitSlop={6}>
+                <Pressable
+                  onPress={() => {
+                    void Linking.openURL('tel:+919944945190');
+                  }}
+                  style={styles.iconBtn}
+                  hitSlop={6}
+                >
                   <Ionicons name="call-outline" size={16} color={Luxe.amberGlow} />
                 </Pressable>
-                <Pressable style={styles.iconBtn} hitSlop={6}>
+                <Pressable
+                  onPress={() => {
+                    router.push({
+                      pathname: '/(app)/concierge',
+                      params: {
+                        prefill: `Quick question about my ${order.type} order ${order.id.slice(0, 6)} — `,
+                      },
+                    });
+                  }}
+                  style={styles.iconBtn}
+                  hitSlop={6}
+                >
                   <Ionicons name="chatbubble-outline" size={16} color={Luxe.amberGlow} />
                 </Pressable>
               </View>

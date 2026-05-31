@@ -13,7 +13,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Luxe, LuxeFonts } from '../../src/theme/luxe';
 import { useLuxeFonts } from '../../src/lib/useLuxeFonts';
 import { PremiumScreen } from '../../src/components/luxe/PremiumScreen';
@@ -82,6 +82,18 @@ export default function ConciergeScreen() {
   const [input, setInput] = useState('');
   const [kbHeight, setKbHeight] = useState(0);
   const inputRef = useRef<TextInput | null>(null);
+
+  // Allow other screens (e.g. rooms.tsx Enquire/Book, feedback.tsx contact-manager)
+  // to deep-link with a prefilled question. Apply once on mount.
+  const params = useLocalSearchParams<{ prefill?: string }>();
+  useEffect(() => {
+    if (typeof params.prefill === 'string' && params.prefill.trim()) {
+      setInput(params.prefill);
+      // Focus the field so the guest can edit or send right away.
+      requestAnimationFrame(() => inputRef.current?.focus());
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [params.prefill]);
 
   const { isRecording, isTranscribing, voiceError, toggle: toggleVoice } = useVoiceInput(
     useCallback((text: string) => { setInput(text); }, []),

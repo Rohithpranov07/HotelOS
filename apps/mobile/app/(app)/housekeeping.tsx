@@ -346,7 +346,7 @@ export default function HousekeepingScreen() {
   };
 
   const send = async () => {
-    if (!selected || !reservation) return;
+    if (!selected) return;
     const item = selected;
     const chosen = slot ? SLOTS.find((s) => s.id === slot) : null;
     let scheduledFor: string | null = null;
@@ -358,8 +358,12 @@ export default function HousekeepingScreen() {
     }
     setSelected(null);
     setSlot(null);
+    // Allow placing the request without a live reservation — requestService
+    // falls back to a local fake order, and the staff queue still picks it up
+    // via the cross-store bridge.
+    const reservationId = reservation?.id ?? 'demo-reservation';
     await requestService(
-      reservation.id,
+      reservationId,
       item.type,
       { name: item.name, price: item.price, etaMinutes: item.etaMinutes },
       {

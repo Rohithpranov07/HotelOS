@@ -46,6 +46,8 @@ import {
   haversineKm,
 } from '../../src/lib/geo';
 import { usePlanStore } from '../../src/stores/plan.store';
+import { useOrdersStore } from '../../src/stores/orders.store';
+import { useReservationStore } from '../../src/stores/reservation.store';
 
 const { width: SW } = Dimensions.get('window');
 type IconName = keyof typeof Ionicons.glyphMap;
@@ -424,16 +426,44 @@ function attractionsToSpots(items: Attraction[]): Spot[] {
   }));
 }
 
+export interface ServiceBookingPayload {
+  type: 'transport' | 'concierge' | 'maintenance';
+  name: string;
+  price: number;
+  etaMinutes?: number;
+  notes?: string;
+}
+
 export default function OtherServicesScreen() {
   void useLuxeFonts();
   const [activeCategory, setActiveCategory] = useState('all');
   const [savedSpots, setSavedSpots] = useState<Set<string>>(new Set());
+  const [toast, setToast] = useState<string | null>(null);
   const apiAttractions = useContentStore((s) => s.attractions);
   const fetchAttractions = useContentStore((s) => s.fetchAttractions);
+  const requestService = useOrdersStore((s) => s.requestService);
+  const reservation = useReservationStore((s) => s.reservation);
 
   useEffect(() => {
     fetchAttractions();
   }, [fetchAttractions]);
+
+  const bookService = async (payload: ServiceBookingPayload) => {
+    void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    const reservationId = reservation?.id ?? 'demo-reservation';
+    try {
+      await requestService(
+        reservationId,
+        payload.type,
+        { name: payload.name, price: payload.price, etaMinutes: payload.etaMinutes },
+        payload.notes ? { notes: payload.notes } : undefined,
+      );
+      setToast(`${payload.name} — concierge confirming, you'll be notified.`);
+    } catch {
+      setToast(`${payload.name} — request queued, the concierge will call you back.`);
+    }
+    setTimeout(() => setToast(null), 3600);
+  };
 
   const SPOTS: Spot[] =
     apiAttractions && apiAttractions.length > 0
@@ -479,13 +509,13 @@ export default function OtherServicesScreen() {
         <MapSection />
 
         <SectionHeader kicker="Getting around" title="Book transport" hint="Concierge arranged" />
-        <TransportGrid />
+        <TransportGrid onBook={bookService} />
 
         <SectionHeader kicker="With an expert" title="Local guide booking" hint="All guides vetted" />
-        <GuidesSection />
+        <GuidesSection onBook={bookService} />
 
         <SectionHeader kicker="Tonight" title="Recommended" hint="Curated for you" />
-        <ExperiencesRail />
+        <ExperiencesRail onBook={bookService} />
 
         <SaveAndPlanSection />
 
@@ -501,6 +531,15 @@ export default function OtherServicesScreen() {
         pointerEvents="none"
         style={styles.dockFade}
       />
+
+      {toast ? (
+        <View pointerEvents="none" style={styles.toastWrap}>
+          <View style={styles.toast}>
+            <Ionicons name="checkmark-circle" size={14} color={Luxe.goldBright} />
+            <Text style={styles.toastText}>{toast}</Text>
+          </View>
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -1108,12 +1147,18 @@ function MapSection() {
   );
 }
 
-function TransportGrid() {
+function TransportGrid({ onBook }: { onBook: (p: ServiceBookingPayload) => void }) {
   const cardW = (SW - 60) / 2;
   return (
     <View style={styles.transportGrid}>
-      {TRANSPORT.map((t) => (
-        <Pressable key={t.id} style={[styles.transportCard, { width: cardW }]}>
+      {TRANSPORT.map((t) => {
+        const price = parseTransportPrice(t.fare);
+        return (
+        <Pressable
+          key={t.id}
+          onPress={() => onBook({ type: 'transport', name: t.label, price, etaMinutes: 15, notes: `${t.label} · ${t.sub} · ${t.fare}` })}
+          style={[styles.transportCard, { width: cardW }]}
+        >
           <LinearGradient
             colors={[t.gradFrom, t.gradTo]}
             start={{ x: 0, y: 0 }}
@@ -1139,17 +1184,35 @@ function TransportGrid() {
             </View>
           </View>
         </Pressable>
-      ))}
+        );
+      })}
     </View>
   );
 }
 
-function GuidesSection() {
+function parseTransportPrice(fare: string): number {
+  // Pull the first integer out of strings like "₹150–250", "₹3,800 / day", "From ₹4,500".
+  const cleaned = fare.replace(/,/g, '');
+  const match = cleaned.match(/(\d+)/);
+  return match ? Number(match[1]) : 0;
+}
+
+function GuidesSection({ onBook }: { onBook: (p: ServiceBookingPayload) => void }) {
   return (
     <View style={styles.guidesList}>
       {GUIDES.map((g, i) => (
-        <View
+        <Pressable
           key={g.id}
+          disabled={!g.avail}
+          onPress={() =>
+            onBook({
+              type: 'concierge',
+              name: g.label,
+              price: parseTransportPrice(g.price),
+              etaMinutes: 30,
+              notes: `${g.label} · ${g.desc} · ${g.duration}`,
+            })
+          }
           style={[
             styles.guideRow,
             i === 0 && { borderTopWidth: 0.5, borderTopColor: Luxe.hairlineStrong },
@@ -1187,13 +1250,13 @@ function GuidesSection() {
               </View>
             )}
           </View>
-        </View>
+        </Pressable>
       ))}
     </View>
   );
 }
 
-function ExperiencesRail() {
+function ExperiencesRail({ onBook }: { onBook: (p: ServiceBookingPayload) => void }) {
   return (
     <ScrollView
       horizontal
@@ -1202,7 +1265,19 @@ function ExperiencesRail() {
       style={styles.expRail}
     >
       {EXPERIENCES.map((exp) => (
-        <View key={exp.id} style={styles.expCard}>
+        <Pressable
+          key={exp.id}
+          onPress={() =>
+            onBook({
+              type: 'concierge',
+              name: exp.title,
+              price: 0,
+              etaMinutes: 45,
+              notes: `${exp.title} · ${exp.desc} · ${exp.tag}`,
+            })
+          }
+          style={styles.expCard}
+        >
           {exp.backgroundImage ? (
             <ExpoImage
               source={exp.backgroundImage}
@@ -1260,7 +1335,7 @@ function ExperiencesRail() {
           <View style={[styles.expCta, exp.backgroundImage ? styles.expCtaOnImage : null]}>
             <Text style={styles.expCtaLabel}>Arrange →</Text>
           </View>
-        </View>
+        </Pressable>
       ))}
     </ScrollView>
   );
@@ -1912,4 +1987,27 @@ const styles = StyleSheet.create({
     color: Luxe.muted, letterSpacing: 1.6, textTransform: 'uppercase',
   },
   dockFade: { position: 'absolute', left: 0, right: 0, bottom: 0, height: 180 },
+  toastWrap: { position: 'absolute', left: 0, right: 0, bottom: 110, alignItems: 'center', paddingHorizontal: 24 },
+  toast: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 11,
+    borderRadius: 14,
+    backgroundColor: 'rgba(20,18,15,0.94)',
+    borderWidth: 0.5,
+    borderColor: 'rgba(244,201,126,0.30)',
+    shadowColor: '#000',
+    shadowOpacity: 0.6,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 8 },
+  },
+  toastText: {
+    fontFamily: LuxeFonts.sans,
+    fontSize: 12.5,
+    color: Luxe.ivory,
+    letterSpacing: 0.2,
+    flexShrink: 1,
+  },
 });

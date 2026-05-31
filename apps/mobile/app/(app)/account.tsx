@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Animated, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Animated, Linking, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
@@ -275,19 +275,32 @@ export default function AccountScreen() {
               <Text style={[styles.cardTitle, { flex: 1 }]}>Chat with concierge</Text>
               <Ionicons name="chevron-forward" size={18} color={Luxe.titanium} />
             </Pressable>
-            <View style={[styles.cardRow, { marginTop: 8 }]}>
+            <Pressable
+              onPress={() => {
+                void Linking.openURL('tel:+919944945190');
+              }}
+              style={[styles.cardRow, { marginTop: 8 }]}
+            >
               <Ionicons name="call-outline" size={20} color={Luxe.ivory} />
               <View style={{ flex: 1 }}>
                 <Text style={styles.cardTitle}>Call reception</Text>
                 <Text style={styles.cardMeta}>+91 9944945190 · 24 hr</Text>
               </View>
               <Ionicons name="open-outline" size={16} color={Luxe.titanium} />
-            </View>
-            <View style={[styles.cardRow, { marginTop: 8 }]}>
+            </Pressable>
+            <Pressable
+              onPress={() =>
+                router.push({
+                  pathname: '/(app)/concierge',
+                  params: { prefill: 'I have a question about my stay — ' },
+                })
+              }
+              style={[styles.cardRow, { marginTop: 8 }]}
+            >
               <Ionicons name="document-text-outline" size={20} color={Luxe.ivory} />
               <Text style={[styles.cardTitle, { flex: 1 }]}>Guest FAQ</Text>
               <Ionicons name="open-outline" size={16} color={Luxe.titanium} />
-            </View>
+            </Pressable>
           </Section>
 
           <Pressable onPress={() => setShowLogout(true)} style={styles.logoutBtn}>

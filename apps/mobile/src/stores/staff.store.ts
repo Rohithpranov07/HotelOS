@@ -303,25 +303,36 @@ export const useStaffStore = create<StaffState>((set, get) => ({
     }),
 
   resetShift: () =>
+    // Only clear the personal shift/session slice — the property-wide queue
+    // (tasks, guest profiles, briefs, feedback) is shared and shouldn't vanish
+    // when one staff member ends their shift or when a guest signs out.
     set({
       onShift: false,
       shiftStartedAt: null,
       completedTodayIds: [],
-      tasks: [],
-      guestProfiles: {},
-      briefs: {},
-      negativeFeedback: [],
+      filter: { type: 'all', mine: false },
     }),
 
   fetchTasks: async () => {
     set({ isLoading: true, error: null });
     try {
       const { data } = await ordersApi.get<{ tasks: StaffTask[] }>('/staff/tasks');
-      const tasks = Array.isArray(data?.tasks) ? data.tasks : [];
-      set({ tasks, isLoading: false });
+      const serverTasks = Array.isArray(data?.tasks) ? data.tasks : [];
+      // Merge: keep any client-side bridged tasks (e.g. just-placed guest
+      // orders) the server doesn't know about yet. Without this merge, a
+      // refetch overwrites the bridged task and the staff queue goes empty.
+      const existing = get().tasks;
+      const serverIds = new Set(serverTasks.map((t) => t.id));
+      const localOnly = existing.filter((t) => !serverIds.has(t.id));
+      set({ tasks: [...serverTasks, ...localOnly], isLoading: false });
     } catch {
-      // Backend not reachable — fall back to demo tasks so the screen demos.
-      set({ tasks: demoSeed(), isLoading: false });
+      // Backend not reachable — keep whatever's already in the store (including
+      // bridged guest orders). Only seed the demo set when we have nothing.
+      const existing = get().tasks;
+      set({
+        tasks: existing.length > 0 ? existing : demoSeed(),
+        isLoading: false,
+      });
     }
   },
 

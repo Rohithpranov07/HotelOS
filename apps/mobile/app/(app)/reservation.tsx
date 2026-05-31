@@ -136,7 +136,7 @@ function ReservationDetails({ reservation }: { reservation: Reservation }) {
       {reservation.status === 'confirmed' ? (
         <Button
           title="Complete check-in"
-          onPress={() => {}}
+          onPress={() => router.push('/(app)/checkin')}
           fullWidth
           size="lg"
         />

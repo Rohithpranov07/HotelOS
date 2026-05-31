@@ -469,12 +469,25 @@ function Spec({ icon, label }: { icon: IconName; label: string }) {
 
 function RoomDetailModal({ room, onClose }: { room: Room; onClose: () => void }) {
   const insets = useSafeAreaInsets();
+  const router = useRouter();
   const [imageIndex, setImageIndex] = useState(0);
   const scrollRef = useRef<ScrollView>(null);
 
   const onScrollEnd = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
     const idx = Math.round(e.nativeEvent.contentOffset.x / SW);
     setImageIndex(idx);
+  };
+
+  const onEnquire = () => {
+    onClose();
+    // Hand off to concierge with the room name prefilled so the guest can
+    // confirm dates / occupants in a familiar chat surface.
+    router.push({
+      pathname: '/(app)/concierge',
+      params: {
+        prefill: `I'd like to enquire about the ${room.name} (from ₹${room.priceFrom.toLocaleString('en-IN')}/night).`,
+      },
+    });
   };
 
   return (
@@ -638,7 +651,7 @@ function RoomDetailModal({ room, onClose }: { room: Room; onClose: () => void })
             <Text style={styles.modalBookAmount}>₹{room.priceFrom.toLocaleString('en-IN')}</Text>
             <Text style={styles.modalBookNight}>/ night</Text>
           </View>
-          <Pressable style={styles.modalBookBtn}>
+          <Pressable onPress={onEnquire} style={styles.modalBookBtn}>
             <LinearGradient
               colors={['#F4C97E', '#D4A857', '#9A7A3F']}
               start={{ x: 0, y: 0 }}
